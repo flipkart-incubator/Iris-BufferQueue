@@ -29,13 +29,13 @@ class MappedHeader {
     static final int HEADER_LENGTH = 4096;
 
     @VisibleForTesting
-    static final long OFFSET_MAX_MSG_LENGTH = 0;   // 0
+    static final long OFFSET_BLOCK_SIZE = 0;   // 0
 
     /* The following is offset by Long.SIZE instead of Integer.SIZE in order to ensure that
                the address is memory aligned.
              */
     @VisibleForTesting
-    static final long OFFSET_WRITE_CURSOR = OFFSET_MAX_MSG_LENGTH + Long.SIZE; // 8
+    static final long OFFSET_WRITE_CURSOR = OFFSET_BLOCK_SIZE + Long.SIZE; // 8
 
     @VisibleForTesting
     static final long OFFSET_READ_CURSOR = OFFSET_WRITE_CURSOR + Long.SIZE;   // 16
@@ -56,13 +56,13 @@ class MappedHeader {
     }
 
     void format(int maxDataLength) {
-        headerBuffer.putInt((int) OFFSET_MAX_MSG_LENGTH, maxDataLength);
+        headerBuffer.putInt((int) OFFSET_BLOCK_SIZE, maxDataLength);
         headerBuffer.putLong((int) OFFSET_READ_CURSOR, 0);
         headerBuffer.putLong((int) OFFSET_WRITE_CURSOR, 0);
     }
 
-    public int maxDataLength() {
-        return headerBuffer.getInt((int) OFFSET_MAX_MSG_LENGTH);
+    public int blockSize() {
+        return headerBuffer.getInt((int) OFFSET_BLOCK_SIZE);
     }
 
     long writeCursor() {

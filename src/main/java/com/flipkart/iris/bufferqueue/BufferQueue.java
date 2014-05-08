@@ -98,6 +98,13 @@ public interface BufferQueue {
     Optional<BufferQueueEntry> next();
 
     /**
+     * Claim the next entry in the buffer queue to write data of given size. <br/>
+     *
+     * @see #next()
+     */
+     Optional<BufferQueueEntry> nextFor(int dataSize);
+
+    /**
      * A higher level helper method to do all the 3-steps of publishing
      * to the BufferQueue in a single method call. This claims a new entry,
      * writes data to the entry and then marks it as published.

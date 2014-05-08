@@ -45,7 +45,7 @@ public class MappedBufferQueue implements BufferQueue {
      *
      * @see #format(java.nio.ByteBuffer, int)
      */
-    public static final int MAX_MAX_DATA_LENGTH = 1024 * 1024; // 1mb
+    public static final int MAX_BLOCK_SIZE = 1024 * 1024; // 1mb
 
     /**
      * Number of milliseconds to wait between syncing the cursors to
@@ -56,7 +56,7 @@ public class MappedBufferQueue implements BufferQueue {
      */
     public static final long SYNC_INTERVAL = 1000; // milliseconds
 
-    private final Integer maxDataLength;
+    private final Integer blockSize;
     private final AtomicLong readCursor = new AtomicLong(0);
     private final AtomicLong writeCursor = new AtomicLong(0);
 
@@ -74,13 +74,12 @@ public class MappedBufferQueue implements BufferQueue {
      * Computes the file size to be used given the max data dataLength
      * and number of messages.
      *
-     * @param maxDataLength The max dataLength of data that can be published to the BufferQueue
+     * @param blockSize Length of each 'block'
      * @param numMessages The maximum number unconsumed messages that the buffer will hold
      * @return The computer file size
      */
-    static long fileSize(int maxDataLength, long numMessages) {
-        return MappedHeader.HEADER_LENGTH
-                + BufferQueueEntry.calculateEntryLength(maxDataLength) * numMessages;
+    static long fileSize(int blockSize, long numMessages) {
+        return blockSize * numMessages;
     }
 
     MappedBufferQueue(File file, ByteBuffer fileBuffer) throws FileNotFoundException, IOException {
@@ -96,7 +95,7 @@ public class MappedBufferQueue implements BufferQueue {
         this.mappedHeader = getHeaderBuffer(fileBuffer);
         this.mappedEntries = getEntriesBuffer(fileBuffer, mappedHeader);
 
-        maxDataLength = mappedHeader.maxDataLength();
+        blockSize = mappedHeader.blockSize();
         readCursor.set(mappedHeader.readCursor());
         writeCursor.set(mappedHeader.writeCursor());
 
@@ -118,12 +117,12 @@ public class MappedBufferQueue implements BufferQueue {
         return new MappedEntries(entriesBuffer, mappedHeader);
     }
 
-    static void format(ByteBuffer fileBuffer, int maxDataLength) {
-        Preconditions.checkArgument(maxDataLength < MAX_MAX_DATA_LENGTH
-                , "maxDataLength must be <= %s", MAX_MAX_DATA_LENGTH);
+    static void format(ByteBuffer fileBuffer, int blockSize) {
+        Preconditions.checkArgument(blockSize < MAX_BLOCK_SIZE
+                , "blockSize must be <= %s", MAX_BLOCK_SIZE);
 
         MappedHeader headerBuffer = getHeaderBuffer(fileBuffer);
-        headerBuffer.format(maxDataLength);
+        headerBuffer.format(blockSize);
 
         MappedEntries entriesBuffer = getEntriesBuffer(fileBuffer, headerBuffer);
         entriesBuffer.format();
@@ -131,7 +130,25 @@ public class MappedBufferQueue implements BufferQueue {
 
     @Override
     public int maxDataLength() {
-        return maxDataLength;
+        // TODO: should subtract internal overhead
+        return Byte.MAX_VALUE * blockSize;
+    }
+
+    public Optional<BufferQueueEntry> next(int numBlocks) {
+        if (writeCursor.get() - readCursor.get() >= capacity() - numBlocks) {
+            forwardReadCursor();
+            if (writeCursor.get() - readCursor.get() >= capacity() - numBlocks) {
+                return Optional.absent();
+            }
+        }
+
+        long n;
+        do {
+            n = writeCursor.get();
+        }
+        while (!writeCursor.compareAndSet(n, n + numBlocks));
+
+        return Optional.of(mappedEntries.makeEntry(n, numBlocks));
     }
 
     @Override
@@ -148,8 +165,13 @@ public class MappedBufferQueue implements BufferQueue {
     }
 
     @Override
+    public Optional<BufferQueueEntry> nextFor(int dataSize) {
+        return next(dataSize / blockSize + dataSize % blockSize != 0 ? 1 : 0);
+    }
+
+    @Override
     public boolean publish(byte[] data) throws BufferOverflowException {
-        Optional<BufferQueueEntry> entry = next();
+        Optional<BufferQueueEntry> entry = nextFor(data.length);
         if (!entry.isPresent()) return false;
 
         try {
@@ -198,7 +220,7 @@ public class MappedBufferQueue implements BufferQueue {
 
     @Override
     public long capacity() {
-        return mappedEntries.capacity;
+        return mappedEntries.capacity / blockSize;
     }
 
     @Override

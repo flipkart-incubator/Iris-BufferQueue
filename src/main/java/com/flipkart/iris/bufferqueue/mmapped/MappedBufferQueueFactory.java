@@ -82,7 +82,7 @@ public class MappedBufferQueueFactory {
     /**
      * A convention-driven factory method that will create and format the backing file if it doesn't already exist. <br/><br/>
      *
-     * This automatically constructs a name for the file that includes the important parameters like maxDataLength and
+     * This automatically constructs a name for the file that includes the important parameters like blockSize and
      * numMessages. So if these parameters are changes during an application restart, a new file will get created.
      * Warning: This could imply that there remain unconsumed data in the old file.
      *
@@ -119,7 +119,7 @@ public class MappedBufferQueueFactory {
         return bufferQueues;
     }
 
-    private static void touchFile(File file, long fileSize) throws IOException {
+    static void touchFile(File file, long fileSize) throws IOException {
         // TODO: find a better way to create a file, one that will work for files larger than 2gb
 
         Preconditions.checkArgument(fileSize > PAGE_SIZE, "fileSize must be at least %s", PAGE_SIZE);
@@ -131,7 +131,7 @@ public class MappedBufferQueueFactory {
         fileBuf.order(ByteOrder.nativeOrder()); // TODO: do we really need this?
     }
 
-    private static MappedByteBuffer mapFile(File file, long fileSize) throws IOException {
+    static MappedByteBuffer mapFile(File file, long fileSize) throws IOException {
         Preconditions.checkArgument(fileSize > PAGE_SIZE, "fileSize must be at least %s", PAGE_SIZE);
 
         RandomAccessFile raf = new RandomAccessFile(file, "rw");

@@ -36,7 +36,7 @@ public class MappedHeaderTest {
 
     @Test
     public void testFormat() throws Exception {
-        assertEquals(MAX_DATA_LENGTH, mappedHeader.maxDataLength());
+        assertEquals(MAX_DATA_LENGTH, mappedHeader.blockSize());
         assertEquals(0, mappedHeader.readCursor());
         assertEquals(0, mappedHeader.writeCursor());
     }

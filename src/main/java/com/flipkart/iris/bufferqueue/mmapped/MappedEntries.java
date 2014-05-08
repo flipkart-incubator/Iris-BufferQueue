@@ -24,13 +24,13 @@ import java.nio.ByteBuffer;
 
 class MappedEntries {
     private final ByteBuffer entriesBuffer;
-    public final int maxEntryLength;
+    public final int blockSize;
     public final long capacity;
 
     MappedEntries(ByteBuffer entriesBuffer, MappedHeader mappedHeader) {
         this.entriesBuffer = entriesBuffer;
-        this.maxEntryLength = BufferQueueEntry.calculateEntryLength(mappedHeader.maxDataLength());
-        this.capacity = entriesBuffer.limit() / maxEntryLength;
+        this.blockSize = mappedHeader.blockSize();
+        this.capacity = entriesBuffer.limit() / blockSize;
     }
 
     public void format() {
@@ -42,27 +42,34 @@ class MappedEntries {
     }
 
     @VisibleForTesting
-    ByteBuffer getMessageBuffer(long index) {
-        int maxMessageLength = maxEntryLength;
-        long offset = (index % capacity) * maxEntryLength;
-
+    ByteBuffer getMessageBuffer(int offset, int numBlocks) {
         ByteBuffer msgBuf = entriesBuffer.duplicate();
-        msgBuf.position((int) offset); // TODO: wrong, because we're casting to int
+        msgBuf.position(offset + 1);
         msgBuf = msgBuf.slice();
-        msgBuf.limit(maxMessageLength);
-
+        msgBuf.limit(blockSize * numBlocks);
         return msgBuf;
     }
 
     @VisibleForTesting
     @NotNull
+    BufferQueueEntry makeEntry(long cursor, int numBlocks) {
+        // TODO: throw exception if numBlocks < Byte.MAX_VALUE?
+        int offset = (int) ((cursor % capacity) * blockSize); // TODO: wrong, because we're casting to int
+        entriesBuffer.put(offset, (byte) numBlocks);
+        return new BufferQueueEntry(getMessageBuffer(offset, numBlocks), cursor);
+    }
+
+    @VisibleForTesting
+    @NotNull
     BufferQueueEntry makeEntry(long cursor) {
-        return new BufferQueueEntry(getMessageBuffer(cursor), cursor);
+        return makeEntry(cursor, 1);
     }
 
     @VisibleForTesting
     @NotNull
     BufferQueueEntry getEntry(long cursor) {
-        return new BufferQueueEntry(getMessageBuffer(cursor));
+        int offset = (int) ((cursor % capacity) * blockSize); // TODO: wrong, because we're casting to int
+        int numBlocks = entriesBuffer.get(offset);
+        return new BufferQueueEntry(getMessageBuffer(offset, numBlocks));
     }
 }
