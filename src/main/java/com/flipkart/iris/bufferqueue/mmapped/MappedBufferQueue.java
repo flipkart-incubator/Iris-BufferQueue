@@ -61,8 +61,8 @@ public class MappedBufferQueue implements BufferQueue {
     private final int headerSyncInterval;
 
     private final Integer blockSize;
-    private final AtomicLong readCursor = new AtomicLong(0);
-    private final AtomicLong writeCursor = new AtomicLong(0);
+    private final AtomicLong consumeCursor = new AtomicLong(0);
+    private final AtomicLong publishCursor = new AtomicLong(0);
 
     private final ByteBuffer fileBuffer;
     private final FileChannel fileChannel;
@@ -98,8 +98,8 @@ public class MappedBufferQueue implements BufferQueue {
         this.mappedEntries = getEntriesBuffer(fileBuffer, mappedHeader);
 
         blockSize = mappedHeader.blockSize();
-        readCursor.set(mappedHeader.readCursor());
-        writeCursor.set(mappedHeader.writeCursor());
+        consumeCursor.set(mappedHeader.readConsumeCursor());
+        publishCursor.set(mappedHeader.readPublishCursor());
 
         headerSyncThread = new HeaderSyncThread(headerSyncInterval);
         headerSyncThread.start();
@@ -126,32 +126,32 @@ public class MappedBufferQueue implements BufferQueue {
     }
 
     public Optional<BufferQueueEntry> next(int numBlocks) {
-        if (writeCursor.get() - readCursor.get() >= capacity() - numBlocks) {
-            forwardReadCursor();
-            if (writeCursor.get() - readCursor.get() >= capacity() - numBlocks) {
+        if (publishCursor.get() - consumeCursor.get() >= capacity() - numBlocks) {
+            forwardConsumeCursor();
+            if (publishCursor.get() - consumeCursor.get() >= capacity() - numBlocks) {
                 return Optional.absent();
             }
         }
 
         long n;
         do {
-            n = writeCursor.get();
+            n = publishCursor.get();
         }
-        while (!writeCursor.compareAndSet(n, n + numBlocks));
+        while (!publishCursor.compareAndSet(n, n + numBlocks));
 
         return Optional.of(mappedEntries.makeEntry(n, numBlocks));
     }
 
     @Override
     public Optional<BufferQueueEntry> next() {
-        if (writeCursor.get() - readCursor.get() >= capacity()) {
-            forwardReadCursor();
-            if (writeCursor.get() - readCursor.get() >= capacity()) {
+        if (publishCursor.get() - consumeCursor.get() >= capacity()) {
+            forwardConsumeCursor();
+            if (publishCursor.get() - consumeCursor.get() >= capacity()) {
                 return Optional.absent();
             }
         }
 
-        long n = writeCursor.incrementAndGet();
+        long n = publishCursor.incrementAndGet();
         return Optional.of(mappedEntries.makeEntry(n));
     }
 
@@ -174,22 +174,22 @@ public class MappedBufferQueue implements BufferQueue {
         return true;
     }
 
-    public long forwardReadCursor() {
-        long readCursorVal;
-        while ((readCursorVal = readCursor.get()) < writeCursor.get()) {
-            BufferQueueEntry entry = mappedEntries.getEntry(readCursorVal);
+    public long forwardConsumeCursor() {
+        long consumeCursorVal;
+        while ((consumeCursorVal = consumeCursor.get()) < publishCursor.get()) {
+            BufferQueueEntry entry = mappedEntries.getEntry(consumeCursorVal);
             if (!entry.isPublished() || !entry.isConsumed()) {
                 break;
             }
-            readCursor.compareAndSet(readCursorVal, readCursorVal + 1);
+            consumeCursor.compareAndSet(consumeCursorVal, consumeCursorVal + 1);
         }
-        return readCursorVal;
+        return consumeCursorVal;
     }
 
     @Override
     public Optional<BufferQueueEntry> consume() {
-        long readCursorVal = forwardReadCursor();
-        if (readCursorVal < writeCursor.get()) {
+        long readCursorVal = forwardConsumeCursor();
+        if (readCursorVal < publishCursor.get()) {
             return Optional.of(mappedEntries.getEntry(readCursorVal));
         }
         return Optional.absent();
@@ -199,8 +199,8 @@ public class MappedBufferQueue implements BufferQueue {
     public List<BufferQueueEntry> consume(int n) {
         List<BufferQueueEntry> bufferQueueEntries = Lists.newArrayList();
 
-        long readCursorVal = forwardReadCursor();
-        for (int i = 0; i < Math.min(n, writeCursor.get() - readCursorVal); i++) {
+        long readCursorVal = forwardConsumeCursor();
+        for (int i = 0; i < Math.min(n, publishCursor.get() - readCursorVal); i++) {
             BufferQueueEntry entry = mappedEntries.getEntry(readCursorVal + i);
             if (!entry.isPublished()) break;
             bufferQueueEntries.add(entry);
@@ -216,7 +216,7 @@ public class MappedBufferQueue implements BufferQueue {
 
     @Override
     public long size() {
-        return (writeCursor.get() - readCursor.get());
+        return (publishCursor.get() - consumeCursor.get());
     }
 
     @Override
@@ -246,13 +246,13 @@ public class MappedBufferQueue implements BufferQueue {
                         try {
                             FileLock lock = fileChannel.lock();
                             try {
-                                long currentWriteCursor = writeCursor.get();
-                                long persistedWriteCursor = mappedHeader.writeCursor(currentWriteCursor);
-                                writeCursor.compareAndSet(currentWriteCursor, persistedWriteCursor);
+                                long currentWriteCursor = publishCursor.get();
+                                long persistedWriteCursor = mappedHeader.commitPublishCursor(currentWriteCursor);
+                                publishCursor.compareAndSet(currentWriteCursor, persistedWriteCursor);
 
-                                long currentReadCursor = readCursor.get();
-                                long persistedReadCursor = mappedHeader.readCursor(currentReadCursor);
-                                readCursor.compareAndSet(currentReadCursor, persistedReadCursor);
+                                long currentReadCursor = consumeCursor.get();
+                                long persistedReadCursor = mappedHeader.commitConsumeCursor(currentReadCursor);
+                                consumeCursor.compareAndSet(currentReadCursor, persistedReadCursor);
                             }
                             finally {
                                 lock.release();

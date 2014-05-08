@@ -37,29 +37,29 @@ public class MappedHeaderTest {
     @Test
     public void testFormat() throws Exception {
         assertEquals(MAX_DATA_LENGTH, mappedHeader.blockSize());
-        assertEquals(0, mappedHeader.readCursor());
-        assertEquals(0, mappedHeader.writeCursor());
+        assertEquals(0, mappedHeader.readConsumeCursor());
+        assertEquals(0, mappedHeader.readPublishCursor());
     }
 
     @Test
-    public void testWriteCursor() throws Exception {
-        long newWriteCursor = mappedHeader.writeCursor() + 1;
-        mappedHeader.writeCursor(newWriteCursor);
-        assertEquals(newWriteCursor, mappedHeader.writeCursor());
+    public void testPublishCursor_Read_And_Commit() throws Exception {
+        long newPublishCursor = mappedHeader.readPublishCursor() + 1;
+        mappedHeader.commitPublishCursor(newPublishCursor);
+        assertEquals(newPublishCursor, mappedHeader.readPublishCursor());
 
-        newWriteCursor = mappedHeader.writeCursor() + 1;
-        mappedHeader.writeCursor(newWriteCursor);
-        assertEquals(newWriteCursor, mappedHeader.writeCursor());
+        newPublishCursor = mappedHeader.readPublishCursor() + 1;
+        mappedHeader.commitPublishCursor(newPublishCursor);
+        assertEquals(newPublishCursor, mappedHeader.readPublishCursor());
     }
 
     @Test
-    public void testReadCursor() throws Exception {
-        long newReadCursor = mappedHeader.readCursor() + 1;
-        mappedHeader.readCursor(newReadCursor);
-        assertEquals(newReadCursor, mappedHeader.readCursor());
+    public void testConsumeCursor_Read_And_Commit() throws Exception {
+        long newConsumeCursor = mappedHeader.readConsumeCursor() + 1;
+        mappedHeader.commitConsumeCursor(newConsumeCursor);
+        assertEquals(newConsumeCursor, mappedHeader.readConsumeCursor());
 
-        newReadCursor = mappedHeader.readCursor() + 1;
-        mappedHeader.readCursor(newReadCursor);
-        assertEquals(newReadCursor, mappedHeader.readCursor());
+        newConsumeCursor = mappedHeader.readConsumeCursor() + 1;
+        mappedHeader.commitConsumeCursor(newConsumeCursor);
+        assertEquals(newConsumeCursor, mappedHeader.readConsumeCursor());
     }
 }

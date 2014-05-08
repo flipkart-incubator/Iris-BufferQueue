@@ -35,21 +35,21 @@ class MappedHeader {
                the address is memory aligned.
              */
     @VisibleForTesting
-    static final long OFFSET_WRITE_CURSOR = OFFSET_BLOCK_SIZE + Long.SIZE; // 8
+    static final long OFFSET_PUBLISH_CURSOR = OFFSET_BLOCK_SIZE + Long.SIZE; // 8
 
     @VisibleForTesting
-    static final long OFFSET_READ_CURSOR = OFFSET_WRITE_CURSOR + Long.SIZE;   // 16
+    static final long OFFSET_CONSUME_CURSOR = OFFSET_PUBLISH_CURSOR + Long.SIZE;   // 16
 
     private final ByteBuffer headerBuffer;
     private int maxDataLengthCached;
 
-    private final ReadWriteLock writeCursorReadWritelock = new ReentrantReadWriteLock();
-    private final Lock writeCursorReadLock = writeCursorReadWritelock.readLock();
-    private final Lock writeCursorWriteLock = writeCursorReadWritelock.writeLock();
+    private final ReadWriteLock publishCursorReadWritelock = new ReentrantReadWriteLock();
+    private final Lock publishCursorReadLock = publishCursorReadWritelock.readLock();
+    private final Lock publishCursorWriteLock = publishCursorReadWritelock.writeLock();
 
-    private final ReadWriteLock readCursorReadWritelock = new ReentrantReadWriteLock();
-    private final Lock readCursorReadLock = readCursorReadWritelock.readLock();
-    private final Lock readCursorWriteLock = readCursorReadWritelock.writeLock();
+    private final ReadWriteLock consumeCursorReadWritelock = new ReentrantReadWriteLock();
+    private final Lock consumeCursorReadLock = consumeCursorReadWritelock.readLock();
+    private final Lock consumeCursorWriteLock = consumeCursorReadWritelock.writeLock();
 
     MappedHeader(ByteBuffer headerBuffer) {
         this.headerBuffer = headerBuffer;
@@ -57,61 +57,61 @@ class MappedHeader {
 
     void format(int maxDataLength) {
         headerBuffer.putInt((int) OFFSET_BLOCK_SIZE, maxDataLength);
-        headerBuffer.putLong((int) OFFSET_READ_CURSOR, 0);
-        headerBuffer.putLong((int) OFFSET_WRITE_CURSOR, 0);
+        headerBuffer.putLong((int) OFFSET_CONSUME_CURSOR, 0);
+        headerBuffer.putLong((int) OFFSET_PUBLISH_CURSOR, 0);
     }
 
     public int blockSize() {
         return headerBuffer.getInt((int) OFFSET_BLOCK_SIZE);
     }
 
-    long writeCursor() {
+    long readPublishCursor() {
         try {
-            writeCursorReadLock.lock();
-            return headerBuffer.getLong((int) MappedHeader.OFFSET_WRITE_CURSOR);
+            publishCursorReadLock.lock();
+            return headerBuffer.getLong((int) MappedHeader.OFFSET_PUBLISH_CURSOR);
         }
         finally {
-            writeCursorReadLock.unlock();
+            publishCursorReadLock.unlock();
         }
     }
 
-    long writeCursor(long n) {
+    long commitPublishCursor(long n) {
         try {
-            writeCursorWriteLock.lock();
-            long currentValue = writeCursor();
+            publishCursorWriteLock.lock();
+            long currentValue = readPublishCursor();
             if (n > currentValue) {
-                headerBuffer.putLong((int) MappedHeader.OFFSET_WRITE_CURSOR, n);
+                headerBuffer.putLong((int) MappedHeader.OFFSET_PUBLISH_CURSOR, n);
                 return n;
             }
         }
         finally {
-            writeCursorWriteLock.unlock();
+            publishCursorWriteLock.unlock();
         }
-        return writeCursor();
+        return readPublishCursor();
     }
 
-    long readCursor() {
+    long readConsumeCursor() {
         try {
-            readCursorReadLock.lock();
-            return headerBuffer.getLong((int) MappedHeader.OFFSET_READ_CURSOR);
+            consumeCursorReadLock.lock();
+            return headerBuffer.getLong((int) MappedHeader.OFFSET_CONSUME_CURSOR);
         }
         finally {
-            readCursorReadLock.unlock();
+            consumeCursorReadLock.unlock();
         }
     }
 
-    long readCursor(long n) {
+    long commitConsumeCursor(long n) {
         try {
-            readCursorWriteLock.lock();
-            long currentValue = readCursor();
+            consumeCursorWriteLock.lock();
+            long currentValue = readConsumeCursor();
             if (n > currentValue) {
-                headerBuffer.putLong((int) MappedHeader.OFFSET_READ_CURSOR, n);
+                headerBuffer.putLong((int) MappedHeader.OFFSET_CONSUME_CURSOR, n);
                 return n;
             }
         }
         finally {
-            readCursorWriteLock.unlock();
+            consumeCursorWriteLock.unlock();
         }
-        return readCursor();
+        return readConsumeCursor();
     }
 }
