@@ -66,7 +66,10 @@ There are no practical reasons to use the low-level publishing API as of now. Bu
 		System.out.println("Queue full, cannot write message");
 	}
 
-It is important that the `markPublished()` call is done within a `finally` block to ensure that it is always made. See the Javadocs for more details: [BufferQueue#next()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#next(\)), [BufferQueueEntry#set()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#set(\)), [BufferQueueEntry#markPublished()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markPublished(\))
+It is important that the `markPublished()` call is done within a `finally` block to ensure that it is always made. See the Javadocs for more details:
+[BufferQueue#next()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#next(\)),
+[BufferQueueEntry#set()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#set(\)),
+[BufferQueueEntry#markPublished()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markPublished(\))
 
 ### Consuming from the queue
 
@@ -86,7 +89,10 @@ It is important that the `markPublished()` call is done within a `finally` block
 		System.out.prinltn("Nothing to consume");
 	}
 
-It is important that the `markConsumed()` call is done within a `finally` block to ensure that it is always made. See the Javadocs for more details: [BufferQueue#consume()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#consume(\)), [BufferQueueEntry#get()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#get(\)), [BufferQueueEntry#markConsumed()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markConsumed(\)).
+It is important that the `markConsumed()` call is done within a `finally` block to ensure that it is always made. See the Javadocs for more details:
+[BufferQueue#consume()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#consume(\)),
+[BufferQueueEntry#get()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#get(\)),
+[BufferQueueEntry#markConsumed()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markConsumed(\)).
 
 ##### Batch API
 
@@ -107,4 +113,7 @@ It is important that the `markConsumed()` call is done within a `finally` block 
 		System.out.prinltn("Nothing to consume");
 	}	
 
-It is important that the `markConsumed()` call is done within a `finally` block to ensure that it is always made. See the Javadocs for more details: [BufferQueue#consume(int)](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#consume(int\)), [BufferQueueEntry#get()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#get(\)), [BufferQueueEntry#markConsumed()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markConsumed(\)).
+It is important that the `markConsumed()` call is done within a `finally` block to ensure that it is always made. See the Javadocs for more details:
+[BufferQueue#consume(int)](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#consume(int\)),
+[BufferQueueEntry#get()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#get(\)),
+[BufferQueueEntry#markConsumed()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markConsumed(\)).
