@@ -39,7 +39,7 @@ public class MappedBufferQueueFactory {
     public static final int PAGE_SIZE = 4 * 1024;
 
     /**
-     * Create an instance of MappedBufferQueue, backed by the given file.
+     * Create an instance of MappedBufferQueue, backed by the given file. <br/><br/>
      *
      * The file must already exist and be formatted correctly. This can be ensured using {@link #format(java.io.File, int, long)}.
      *
@@ -58,7 +58,7 @@ public class MappedBufferQueueFactory {
     }
 
     /**
-     * Format a file to be used as a backing file for a MappedBufferQueue.
+     * Format a file to be used as a backing file for a MappedBufferQueue. <br/><br/>
      *
      * The file must not already exist, it will be created.
      *
@@ -80,7 +80,7 @@ public class MappedBufferQueueFactory {
     }
 
     /**
-     * A convention-driven factory method that will create and format the backing file if it doesn't already exist.
+     * A convention-driven factory method that will create and format the backing file if it doesn't already exist. <br/><br/>
      *
      * This automatically constructs a name for the file that includes the important parameters like maxDataLength and
      * numMessages. So if these parameters are changes during an application restart, a new file will get created.

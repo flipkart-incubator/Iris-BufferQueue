@@ -26,13 +26,15 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
- * Represents an entry in a <code>BufferQueue</code>.
+ * Represents an entry in a <code>BufferQueue</code>. <br/><br/>
  *
  * A <code>BufferQueueEntry</code> is in one of three states:
  *
- *     1. Claimed, but not yet published.
- *     2. Published, but not yet consumed.
- *     3. Consumed, can be claimed again.
+ * <ol>
+ *     <li>Claimed, but not yet published.</li>
+ *     <li>Published, but not yet consumed.</li>
+ *     <li>Consumed, can be claimed again.</li>
+ * </ol>
  *
  * This class is NOT thread-safe, if entry objects are shared
  * across threads, access must be synchronized.
@@ -57,11 +59,11 @@ public class BufferQueueEntry {
     long cursor;
 
     /**
-     * To be used when claiming a new entry. The returned entity will be "Claimed, but not yet published".
+     * To be used when claiming a new entry. The returned entity will be "Claimed, but not yet published". <br/><br/>
      *
      * The argument <code>buf</code> will be used as the backing <code>ByteBuffer</code> for this entry.
      * The argument <code>cursor</code> will be set as the cursor for this entry but it won't be written into
-     * <code>buf</code> until the entry is marked as published (after data is written to it).
+     * <code>buf</code> until the entry is marked as published (after data is written to it). <br/><br/>
      *
      * This constructor is part of the internal API and shouldn't be used by clients.
      * Instead, clients should get instances of <code>BufferQueueEntry</code>s from implementations of
@@ -77,10 +79,10 @@ public class BufferQueueEntry {
     }
 
     /**
-     * To be used for entries that are "Published, but not yet consumed".
+     * To be used for entries that are "Published, but not yet consumed". <br/><br/>
      *
      * The argument <code>buf</code> must thus represent such an entry.
-     * The entry's <code>cursor</code> will be read from the buf.
+     * The entry's <code>cursor</code> will be read from the buf. <br/><br/>
      *
      * This constructor is part of the internal API and shouldn't be used by clients.
      * Instead, clients should get instances of <code>BufferQueueEntry</code>s from implementations of
@@ -100,7 +102,7 @@ public class BufferQueueEntry {
 
     /**
      * Set the data of the entry. <b>Important</b>: The entry will not be marked as published after the data is set.
-     * This must be done explicitly by calling {@link #markPublished()}.
+     * This must be done explicitly by calling {@link #markPublished()}. <br/><br/>
      *
      * It is recommended that this method be called in a try block followed by a finally block where the entry is marked
      * as published; the entry must be marked as published even if writing data to the entry failed.
@@ -131,7 +133,7 @@ public class BufferQueueEntry {
     }
 
     /**
-     * Mark this entry as published.
+     * Mark this entry as published. <br/><br/>
      *
      * Once an entry is marked as published, it cannot be written to. It is important to mark every entry that is claimed
      * as published because otherwise the entire buffer queue consumption is stalled when it reaches this entry.
@@ -163,7 +165,7 @@ public class BufferQueueEntry {
     }
 
     /**
-     * Get the max length of data that can be written to this entry.
+     * Get the max length of data that can be written to this entry. <br/><br/>
      *
      * Trying to write more than this amount of data will lead to a {@link java.nio.BufferOverflowException}.
      *
@@ -175,7 +177,7 @@ public class BufferQueueEntry {
 
     /**
      * Get the data published to this entry. <b>Important</b>: The entry will not be marked as consumed after the data
-     * read. This must be done explicitly by calling {@link #markConsumed()}.
+     * read. This must be done explicitly by calling {@link #markConsumed()}. <br/><br/>
      *
      * It is recommended that this method be called in a try block followed by a finally block where the entry is marked
      * as consumed; the entry must be marked as consumed even if processing the data failed.
@@ -210,7 +212,7 @@ public class BufferQueueEntry {
     }
 
     /**
-     * Mark this entry as published.
+     * Mark this entry as published. <br/><br/>
      *
      * Once an entry is marked as consumed, it cannot be read from. It is important to mark every entry that is obtained
      * as consumed because otherwise the entire buffer queue consumption is stalled.
@@ -252,7 +254,7 @@ public class BufferQueueEntry {
 
     /**
      * Given message data length to be be written, calculate the size of the byte buffer that must be used for
-     * creating an entry.
+     * creating an entry. <br/><br/>
      *
      * Intended as a helper method to be used by BufferQueue implementations.
      *
