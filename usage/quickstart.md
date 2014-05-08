@@ -47,7 +47,8 @@ Let's publish a simple message to the queue.
 
     bufferQueue.publish(data);
 
-See the Javadocs for more details: [BufferQueue#publish(byte[])](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#publish(byte[]\)).
+See the Javadocs for more details:
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#publish(byte[])">BufferQueue#publish(byte[])</a>.
 
 ##### Low-level API
 
@@ -67,9 +68,9 @@ There are no practical reasons to use the low-level publishing API as of now. Bu
 	}
 
 It is important that the `markPublished()` call is done within a `finally` block to ensure that it is always made. See the Javadocs for more details:
-[BufferQueue#next()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#next(\)),
-[BufferQueueEntry#set()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#set(\)),
-[BufferQueueEntry#markPublished()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markPublished(\))
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#next()">BufferQueue#next()</a>,
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#set()">BufferQueueEntry#set()</a>,
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markPublished()">BufferQueueEntry#markPublished()</a>
 
 ### Consuming from the queue
 
@@ -90,9 +91,9 @@ It is important that the `markPublished()` call is done within a `finally` block
 	}
 
 It is important that the `markConsumed()` call is done within a `finally` block to ensure that it is always made. See the Javadocs for more details:
-[BufferQueue#consume()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#consume(\)),
-[BufferQueueEntry#get()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#get(\)),
-[BufferQueueEntry#markConsumed()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markConsumed(\)).
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#consume()">BufferQueue#consume()</a>,
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#get()">BufferQueueEntry#get()</a>,
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markConsumed()">BufferQueueEntry#markConsumed()</a>.
 
 ##### Batch API
 
@@ -114,6 +115,6 @@ It is important that the `markConsumed()` call is done within a `finally` block 
 	}	
 
 It is important that the `markConsumed()` call is done within a `finally` block to ensure that it is always made. See the Javadocs for more details:
-[BufferQueue#consume(int)](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#consume(int\)),
-[BufferQueueEntry#get()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#get(\)),
-[BufferQueueEntry#markConsumed()](//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markConsumed(\)).
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueue.html#consume(int)">BufferQueue#consume(int)</a>,
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#get()">BufferQueueEntry#get()</a>,
+<a href="//site/latest/javadocs/com/flipkart/iris/bufferqueue/BufferQueueEntry.html#markConsumed()">BufferQueueEntry#markConsumed()</a>.
