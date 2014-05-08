@@ -55,15 +55,16 @@ public class MappedBufferQueue implements BufferQueue {
      *
      * @see MappedBufferQueue.HeaderSyncThread
      */
-    public static final long SYNC_INTERVAL = 1000; // milliseconds
+    public static final int DEFAULT_SYNC_INTERVAL = 10; // milliseconds
+
+    private final File file;
+    private final int headerSyncInterval;
 
     private final Integer blockSize;
     private final AtomicLong readCursor = new AtomicLong(0);
     private final AtomicLong writeCursor = new AtomicLong(0);
 
-    private final File file;
     private final ByteBuffer fileBuffer;
-
     private final FileChannel fileChannel;
 
     private final MappedHeader mappedHeader;
@@ -85,13 +86,13 @@ public class MappedBufferQueue implements BufferQueue {
         entriesBuffer.format();
     }
 
-    private MappedBufferQueue(File file) throws IOException {
+    private MappedBufferQueue(File file, int headerSyncInterval) throws IOException {
 
         this.file = file;
-        this.fileBuffer = Helper.mapFile(file, file.length());
+        this.headerSyncInterval = headerSyncInterval;
 
-        RandomAccessFile raf = new RandomAccessFile(file, "rw");
-        this.fileChannel = raf.getChannel();
+        this.fileBuffer = Helper.mapFile(file, file.length());
+        this.fileChannel = new RandomAccessFile(file, "rw").getChannel();
 
         this.mappedHeader = getHeaderBuffer(fileBuffer);
         this.mappedEntries = getEntriesBuffer(fileBuffer, mappedHeader);
@@ -100,7 +101,7 @@ public class MappedBufferQueue implements BufferQueue {
         readCursor.set(mappedHeader.readCursor());
         writeCursor.set(mappedHeader.writeCursor());
 
-        headerSyncThread = new HeaderSyncThread(SYNC_INTERVAL);
+        headerSyncThread = new HeaderSyncThread(headerSyncInterval);
         headerSyncThread.start();
     }
 
@@ -285,7 +286,7 @@ public class MappedBufferQueue implements BufferQueue {
 
     public class Builder {
         private File file;
-        private int headerSyncInterval;
+        private int headerSyncInterval = DEFAULT_SYNC_INTERVAL;
 
         private boolean formatIfNotExists = false;
         private int blockSize;
@@ -293,6 +294,11 @@ public class MappedBufferQueue implements BufferQueue {
 
         public Builder(File file) {
             this.file = file;
+        }
+
+        public Builder headerSyncInterval(int headerSyncInterval) {
+            this.headerSyncInterval = headerSyncInterval;
+            return this;
         }
 
         public Builder formatIfNotExists(int fileSize, int blockSize) {
@@ -307,7 +313,7 @@ public class MappedBufferQueue implements BufferQueue {
                 format(file, fileSize, blockSize);
             }
 
-            return new MappedBufferQueue(file);
+            return new MappedBufferQueue(file, headerSyncInterval);
         }
     }
 }
