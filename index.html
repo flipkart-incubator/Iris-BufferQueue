@@ -1,216 +1,74 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="chrome=1">
-    <title>Iris-BufferQueue by flipkart-incubator</title>
-    <link rel="stylesheet" href="stylesheets/styles.css">
-    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
-    <script src="javascripts/respond.js"></script>
-    <!--[if lt IE 9]>
-      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
-    <![endif]-->
-    <!--[if lt IE 8]>
-    <link rel="stylesheet" href="stylesheets/ie.css">
-    <![endif]-->
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" href="../../assets/ico/favicon.ico">
 
+    <title>Iris-BufferQueue</title>
+
+<!--     <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/bootstrap/css/bootstrap-theme.min.css"> -->
+<!--     <link rel="stylesheet" href="assets/bootstrap/themes/flatly.min.css"> -->
+    <link rel="stylesheet" href="assets/bootstrap/themes/cosmo.min.css">
+<!--     <link rel="stylesheet" href="assets/bootstrap/themes/yeti.min.css"> -->
+    <style>
+      body {
+        padding-top: 50px;
+        background-color: #efefef;
+      }
+      #content {
+        padding: 5px 15px;
+        background-color: #ffffff;
+      }
+      h5 {
+        font-weight: bold;
+      }
+    </style>
   </head>
-  <body>
-      <div id="header">
-        <nav>
-          <li class="fork"><a href="https://github.com/flipkart-incubator/Iris-BufferQueue">View On GitHub</a></li>
-          <li class="downloads"><a href="https://github.com/flipkart-incubator/Iris-BufferQueue/zipball/master">ZIP</a></li>
-          <li class="downloads"><a href="https://github.com/flipkart-incubator/Iris-BufferQueue/tarball/master">TAR</a></li>
-          <li class="title">DOWNLOADS</li>
-        </nav>
-      </div><!-- end header -->
 
-    <div class="wrapper">
+  <body role="document">
 
-      <section>
-        <div id="title">
-          <h1>Iris-BufferQueue</h1>
-          <p>A fast, in-process, persisted queue for buffering data on local host.</p>
-          <hr>
-          <span class="credits left">Project maintained by <a href="https://github.com/flipkart-incubator">flipkart-incubator</a></span>
-          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+    <!-- Fixed navbar -->
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation" position="relative">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#">Iris-BufferQueue</a>
         </div>
-
-        <p>Iris-BufferQueue is a message queue implemented as a Java library. It is primarily intended for buffering data on local
-host before processing it asynchronously.</p>
-
-<p>Iris-BufferQueue has the following characteristics:</p>
-
-<ul>
-<li>It's an <em>in-process</em> queue, although writing to the queue and consuming from it can happen in two different processes</li>
-<li>It's <em>persisted</em> on disk, preserving data across application restarts and crashes</li>
-<li>
-<em>Publishing</em> to the queue can happen in parallel from <em>multiple threads</em>; <em>no synchronisation</em> is required</li>
-<li>
-<em>Consumption</em> from the queue can only be done by a <em>single thread</em>
-</li>
-<li>
-<em>Consumption</em> can be happen in <em>batches</em>
-</li>
-</ul><p>These characteristics are explained in greater detail in <a href="docs/characteristics.md">the documentation</a>.</p>
-
-<h2>
-<a name="usage" class="anchor" href="#usage"><span class="octicon octicon-link"></span></a>Usage</h2>
-
-<h3>
-<a name="get-the-jar" class="anchor" href="#get-the-jar"><span class="octicon octicon-link"></span></a>Get the Jar</h3>
-
-<h4>
-<a name="maven" class="anchor" href="#maven"><span class="octicon octicon-link"></span></a>Maven</h4>
-
-<p>Add the following repository to the 'repositories' section of your pom.xml</p>
-
-<pre><code>&lt;repository&gt;
-  &lt;id&gt;clojars&lt;/id&gt;
-  &lt;name&gt;Clojars repository&lt;/name&gt;
-  &lt;url&gt;https://clojars.org/repo&lt;/url&gt;
-&lt;/repository&gt;
-</code></pre>
-
-<p>And add the following dependency to the 'dependencies' section of your pom.xml.</p>
-
-<pre><code>&lt;dependency&gt;
-  &lt;groupId&gt;com.flipkart.iris&lt;/groupId&gt;
-  &lt;artifactId&gt;bufferqueue&lt;/artifactId&gt;
-  &lt;version&gt;0.1&lt;/version&gt;
-&lt;/dependency&gt;
-</code></pre>
-
-<h4>
-<a name="download" class="anchor" href="#download"><span class="octicon octicon-link"></span></a>Download</h4>
-
-<p>You can download the jar and find all the dependencies on <a href="https://clojars.org/com.flipkart.iris/bufferqueue">Clojars</a>.</p>
-
-<h3>
-<a name="create-an-instance" class="anchor" href="#create-an-instance"><span class="octicon octicon-link"></span></a>Create an instance</h3>
-
-<pre><code>File file = new File("test.ibq");
-if (!file.exists()) {
-    int maxDataLength = 4 * 1024; // max size of data that can be written to the queue
-    long numMessages = 1000000; // maximum number of unconsumed messages that can be kept in the queue
-    MappedBufferQueueFactory.format(file, maxDataLength, numMessages);
-}
-BufferQueue bufferQueue = MappedBufferQueueFactory.getInstance(file);
-</code></pre>
-
-<h3>
-<a name="publish" class="anchor" href="#publish"><span class="octicon octicon-link"></span></a>Publish</h3>
-
-<p>Let's publish a simple message to the queue.</p>
-
-<pre><code>byte[] data = "Hello world!".getBytes();
-</code></pre>
-
-<h5>
-<a name="high-level-api" class="anchor" href="#high-level-api"><span class="octicon octicon-link"></span></a>High-level API</h5>
-
-<pre><code>bufferQueue.publish(data);
-</code></pre>
-
-<h5>
-<a name="low-level-api" class="anchor" href="#low-level-api"><span class="octicon octicon-link"></span></a>Low-level API</h5>
-
-<pre><code>BufferQueueEntry entry = bufferQueue.next().orNull();
-if (entry != null) {
-    try {
-        entry.set(data);
-    }
-    finally {
-        entry.markPublished();
-    }
-}
-else {
-    System.out.println("Queue full, cannot write message");
-}
-</code></pre>
-
-<p>It is important that the <code>markPublished()</code> call is done within a <code>finally</code> block to ensure that it is always made.</p>
-
-<h3>
-<a name="consuming-from-the-queue" class="anchor" href="#consuming-from-the-queue"><span class="octicon octicon-link"></span></a>Consuming from the queue</h3>
-
-<h5>
-<a name="simple-api" class="anchor" href="#simple-api"><span class="octicon octicon-link"></span></a>Simple API</h5>
-
-<pre><code>BufferQueueEntry entry = bufferQueue.consume().orNull());
-if (entry != null) {
-    try {
-        byte[] data = entry.get();
-        System.out.println(data);
-    }
-    finally {
-        entry.markConsumed();
-    }
-}
-else {
-    System.out.prinltn("Nothing to consume");
-}
-</code></pre>
-
-<p>It is important that the <code>markConsumed()</code> call is done within a <code>finally</code> block to ensure that it is always made.</p>
-
-<h5>
-<a name="batch-api" class="anchor" href="#batch-api"><span class="octicon octicon-link"></span></a>Batch API</h5>
-
-<pre><code>int batchSize = 100;
-List&lt;BufferQueueEntry&gt; entries = bufferQueue.consume(batchSize);
-if (entries.size() &gt; 0) {
-    for (BufferQueueEntry entry : entries) {
-        try {
-            byte[] data = entry.get();
-            System.out.println(data);
-        }
-        finally {
-            entry.markConsumed();
-        }
-    }
-}
-else {
-    System.out.prinltn("Nothing to consume");
-}   
-</code></pre>
-
-<p>It is important that the <code>markConsumed()</code> call is done within a <code>finally</code> block to ensure that it is always made.</p>
-
-<h2>
-<a name="documentation" class="anchor" href="#documentation"><span class="octicon octicon-link"></span></a>Documentation</h2>
-
-<p>TODO: Point to detailed design, usage and API docs.</p>
-
-<h2>
-<a name="contribution-bugs-and-feedback" class="anchor" href="#contribution-bugs-and-feedback"><span class="octicon octicon-link"></span></a>Contribution, Bugs and Feedback</h2>
-
-<p>For bugs, questions and discussions please use the <a href="https://github.com/flipkart-incubator/Iris-BufferQueue/issues">Github Issues</a>.</p>
-
-<p>Please follow the <a href="https://github.com/flipkart-incubator/Iris-BufferQueue/blob/master/CONTRIBUTING.md">contribution guidelines</a> when submitting pull requests.</p>
-
-<h2>
-<a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>LICENSE</h2>
-
-<p>Copyright 2014 Flipkart Internet Pvt. Ltd.</p>
-
-<p>Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at</p>
-
-<p><a href="http://www.apache.org/licenses/LICENSE-2.0">http://www.apache.org/licenses/LICENSE-2.0</a></p>
-
-<p>Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.</p>
-      </section>
-
+        <div class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li class=""><a href="#">Home</a></li>
+            <li class="dropdown">
+              <a href="#" class="dropdown-toggle" data-toggle="dropdown">Usage<b class="caret"></b></a>
+              <ul class="dropdown-menu">
+                <li><a href="#/usage/quickstart">Quickstart</a></li>
+                <li><a href="site/0.1/javadocs">Javadocs</a></li>
+              </ul>
+            </li>
+			<li id="loading"><img style="margin-top: 8px;" src="assets/ajax-loader.gif"></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
     </div>
-    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
-    
+
+	<div id="body" style="position: relative;">
+		<a href="https://github.com/you"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/e7bbb0521b397edbd5fe43e7f760759336b5e05f/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f677265656e5f3030373230302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png"></a>
+		<div id="content" class="container theme-showcase" role="main">
+		</div>
+	</div>
+
+    <script src="assets/jquery.min.js"></script>
+    <script src="assets/bootstrap/js/bootstrap.min.js"></script>
+    <script src="assets/Markdown.Converter.js"></script>
+    <script src="assets/truestatic.js"></script>
   </body>
 </html>
