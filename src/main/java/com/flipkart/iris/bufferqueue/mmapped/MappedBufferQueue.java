@@ -23,7 +23,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.BufferOverflowException;
@@ -32,6 +31,8 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static com.flipkart.iris.bufferqueue.mmapped.MappedHeader.HEADER_LENGTH;
 
 /**
  * A BufferQueue implementation using a memory mapped file.
@@ -43,7 +44,7 @@ public class MappedBufferQueue implements BufferQueue {
     /**
      * Maximum value of the max data length that can be set.
      *
-     * @see #format(java.nio.ByteBuffer, int)
+     * @see #format(File, int, int)
      */
     public static final int MAX_BLOCK_SIZE = 1024 * 1024; // 1mb
 
@@ -70,24 +71,24 @@ public class MappedBufferQueue implements BufferQueue {
 
     private final HeaderSyncThread headerSyncThread;
 
-    /**
-     * Computes the file size to be used given the max data dataLength
-     * and number of messages.
-     *
-     * @param blockSize Length of each 'block'
-     * @param numMessages The maximum number unconsumed messages that the buffer will hold
-     * @return The computer file size
-     */
-    static long fileSize(int blockSize, long numMessages) {
-        return blockSize * numMessages;
+    private static void format(File file, int fileSize, int blockSize) throws IOException {
+        Preconditions.checkArgument(blockSize < MAX_BLOCK_SIZE
+                , "blockSize must be <= %s", MAX_BLOCK_SIZE);
+
+        Helper.createFile(file, fileSize);
+        ByteBuffer fileBuffer = Helper.mapFile(file, blockSize);
+
+        MappedHeader headerBuffer = getHeaderBuffer(fileBuffer);
+        headerBuffer.format(blockSize);
+
+        MappedEntries entriesBuffer = getEntriesBuffer(fileBuffer, headerBuffer);
+        entriesBuffer.format();
     }
 
-    MappedBufferQueue(File file, ByteBuffer fileBuffer) throws FileNotFoundException, IOException {
-
-        fileBuffer = fileBuffer.duplicate();
+    private MappedBufferQueue(File file) throws IOException {
 
         this.file = file;
-        this.fileBuffer = fileBuffer;
+        this.fileBuffer = Helper.mapFile(file, file.length());
 
         RandomAccessFile raf = new RandomAccessFile(file, "rw");
         this.fileChannel = raf.getChannel();
@@ -105,27 +106,16 @@ public class MappedBufferQueue implements BufferQueue {
 
     private static MappedHeader getHeaderBuffer(ByteBuffer fileBuffer) {
         ByteBuffer headerBuffer = fileBuffer.duplicate();
-        headerBuffer.limit(MappedHeader.HEADER_LENGTH);
+        headerBuffer.limit(HEADER_LENGTH);
         headerBuffer.rewind();
         return new MappedHeader(headerBuffer);
     }
 
     private static MappedEntries getEntriesBuffer(ByteBuffer fileBuffer, MappedHeader mappedHeader) {
-        fileBuffer.position(MappedHeader.HEADER_LENGTH);
+        fileBuffer.position(HEADER_LENGTH);
         ByteBuffer entriesBuffer = fileBuffer.slice();
         entriesBuffer.rewind();
         return new MappedEntries(entriesBuffer, mappedHeader);
-    }
-
-    static void format(ByteBuffer fileBuffer, int blockSize) {
-        Preconditions.checkArgument(blockSize < MAX_BLOCK_SIZE
-                , "blockSize must be <= %s", MAX_BLOCK_SIZE);
-
-        MappedHeader headerBuffer = getHeaderBuffer(fileBuffer);
-        headerBuffer.format(blockSize);
-
-        MappedEntries entriesBuffer = getEntriesBuffer(fileBuffer, headerBuffer);
-        entriesBuffer.format();
     }
 
     @Override
@@ -290,6 +280,34 @@ public class MappedBufferQueue implements BufferQueue {
             synchronized (this) {
                 notifyAll();
             }
+        }
+    }
+
+    public class Builder {
+        private File file;
+        private int headerSyncInterval;
+
+        private boolean formatIfNotExists = false;
+        private int blockSize;
+        private int fileSize;
+
+        public Builder(File file) {
+            this.file = file;
+        }
+
+        public Builder formatIfNotExists(int fileSize, int blockSize) {
+            formatIfNotExists = true;
+            this.blockSize = blockSize;
+            this.fileSize = fileSize;
+            return this;
+        }
+
+        public MappedBufferQueue build() throws IOException {
+            if (!file.exists() && formatIfNotExists) {
+                format(file, fileSize, blockSize);
+            }
+
+            return new MappedBufferQueue(file);
         }
     }
 }
