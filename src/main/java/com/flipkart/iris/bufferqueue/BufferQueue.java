@@ -98,7 +98,10 @@ public interface BufferQueue {
     Optional<BufferQueueEntry> next();
 
     /**
-     * Claim the next entry in the buffer queue to write data of given size. <br/>
+     * Claim the next entry in the buffer queue to write data of given size. <br/><br/>
+     *
+     * Similar care needs to be taken when using this method as that which is required when using {@link #next()}. See
+     * the docs for that to understand these care instructions.
      *
      * @see #next()
      */

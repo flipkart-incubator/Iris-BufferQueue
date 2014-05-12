@@ -35,42 +35,36 @@ import java.util.concurrent.atomic.AtomicLong;
 import static com.flipkart.iris.bufferqueue.mmapped.MappedHeader.HEADER_LENGTH;
 
 /**
- * A BufferQueue implementation using a memory mapped file.
+ * A BufferQueue implementation backed by a memory mapped file.
  *
  * @see com.flipkart.iris.bufferqueue.BufferQueue
  */
 public class MappedBufferQueue implements BufferQueue {
 
     /**
-     * Maximum value of the max data length that can be set.
+     * Maximum block size that can be used.
      *
      * @see #format(File, int, int)
      */
-    public static final int MAX_BLOCK_SIZE = 1024 * 1024; // 1mb
+    private static final int MAX_BLOCK_SIZE = 1024 * 1024; // 1mb
 
     /**
      * Number of milliseconds to wait between syncing the cursors to
      * the header. If the application crashes, messages corresponding to
-     * the unsynced cursors may be lost.
+     * the un-synced cursors may be lost.
      *
      * @see MappedBufferQueue.HeaderSyncThread
      */
     public static final int DEFAULT_SYNC_INTERVAL = 10; // milliseconds
 
-    private final File file;
-    private final int headerSyncInterval;
-
     private final Integer blockSize;
     private final AtomicLong consumeCursor = new AtomicLong(0);
     private final AtomicLong publishCursor = new AtomicLong(0);
 
-    private final ByteBuffer fileBuffer;
     private final FileChannel fileChannel;
 
     private final MappedHeader mappedHeader;
     private final MappedEntries mappedEntries;
-
-    private final HeaderSyncThread headerSyncThread;
 
     private static void format(File file, int fileSize, int blockSize) throws IOException {
         Preconditions.checkArgument(blockSize < MAX_BLOCK_SIZE
@@ -88,10 +82,7 @@ public class MappedBufferQueue implements BufferQueue {
 
     private MappedBufferQueue(File file, int headerSyncInterval) throws IOException {
 
-        this.file = file;
-        this.headerSyncInterval = headerSyncInterval;
-
-        this.fileBuffer = Helper.mapFile(file, file.length());
+        ByteBuffer fileBuffer = Helper.mapFile(file, file.length());
         this.fileChannel = new RandomAccessFile(file, "rw").getChannel();
 
         this.mappedHeader = getHeaderBuffer(fileBuffer);
@@ -101,7 +92,7 @@ public class MappedBufferQueue implements BufferQueue {
         consumeCursor.set(mappedHeader.readConsumeCursor());
         publishCursor.set(mappedHeader.readPublishCursor());
 
-        headerSyncThread = new HeaderSyncThread(headerSyncInterval);
+        HeaderSyncThread headerSyncThread = new HeaderSyncThread(headerSyncInterval);
         headerSyncThread.start();
     }
 
@@ -125,6 +116,14 @@ public class MappedBufferQueue implements BufferQueue {
         return Byte.MAX_VALUE * blockSize;
     }
 
+    /**
+     * Claim the next entry in the buffer queue, ensuring that it spans across the given number of blocks. <br/><br/>
+     *
+     * Similar care needs to be taken when using this method as that which is required when using {@link #next()}. See
+     * the docs for that method to understand these care instructions.
+     *
+     * @see #next()
+     */
     public Optional<BufferQueueEntry> next(int numBlocks) {
         if (publishCursor.get() - consumeCursor.get() >= capacity() - numBlocks) {
             forwardConsumeCursor();

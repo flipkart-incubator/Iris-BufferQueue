@@ -212,7 +212,7 @@ public class BufferQueueEntry {
     }
 
     /**
-     * Mark this entry as published. <br/><br/>
+     * Mark this entry as consumed. <br/><br/>
      *
      * Once an entry is marked as consumed, it cannot be read from. It is important to mark every entry that is obtained
      * as consumed because otherwise the entire buffer queue consumption is stalled.
