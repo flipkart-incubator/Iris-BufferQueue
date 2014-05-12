@@ -12,7 +12,7 @@ Iris-BufferQueue has the following characteristics:
 - *Consumption* from the queue can only be done by a *single thread*
 - *Consumption* can be happen in *batches*
 
-These characteristics are explained in greater detail in [the documentation](docs/characteristics.md).
+These characteristics are explained in greater detail in [the documentation](http://flipkart-incubator.github.io/Iris-BufferQueue/#/design/characteristics).
 
 
 Usage
