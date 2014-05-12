@@ -110,10 +110,16 @@ public class MappedBufferQueue implements BufferQueue {
         return new MappedEntries(entriesBuffer, mappedHeader);
     }
 
-    @Override
-    public int maxDataLength() {
-        // TODO: should subtract internal overhead
-        return Byte.MAX_VALUE * blockSize;
+    public long forwardConsumeCursor() {
+        long consumeCursorVal;
+        while ((consumeCursorVal = consumeCursor.get()) < publishCursor.get()) {
+            BufferQueueEntry entry = mappedEntries.getEntry(consumeCursorVal);
+            if (!entry.isPublished() || !entry.isConsumed()) {
+                break;
+            }
+            consumeCursor.compareAndSet(consumeCursorVal, consumeCursorVal + 1);
+        }
+        return consumeCursorVal;
     }
 
     /**
@@ -125,16 +131,15 @@ public class MappedBufferQueue implements BufferQueue {
      * @see #next()
      */
     public Optional<BufferQueueEntry> next(int numBlocks) {
-        if (publishCursor.get() - consumeCursor.get() >= capacity() - numBlocks) {
-            forwardConsumeCursor();
-            if (publishCursor.get() - consumeCursor.get() >= capacity() - numBlocks) {
-                return Optional.absent();
-            }
-        }
-
         long n;
         do {
             n = publishCursor.get();
+            if (n - consumeCursor.get() >= capacity() - numBlocks) {
+                forwardConsumeCursor();
+                if (n - consumeCursor.get() >= capacity() - numBlocks) {
+                    return Optional.absent();
+                }
+            }
         }
         while (!publishCursor.compareAndSet(n, n + numBlocks));
 
@@ -143,19 +148,12 @@ public class MappedBufferQueue implements BufferQueue {
 
     @Override
     public Optional<BufferQueueEntry> next() {
-        if (publishCursor.get() - consumeCursor.get() >= capacity()) {
-            forwardConsumeCursor();
-            if (publishCursor.get() - consumeCursor.get() >= capacity()) {
-                return Optional.absent();
-            }
-        }
-
-        long n = publishCursor.incrementAndGet();
-        return Optional.of(mappedEntries.makeEntry(n));
+        return next(1);
     }
 
     @Override
     public Optional<BufferQueueEntry> nextFor(int dataSize) {
+        // TODO: account for internal entry overhead
         return next(dataSize / blockSize + dataSize % blockSize != 0 ? 1 : 0);
     }
 
@@ -171,18 +169,6 @@ public class MappedBufferQueue implements BufferQueue {
             entry.get().markPublished();
         }
         return true;
-    }
-
-    public long forwardConsumeCursor() {
-        long consumeCursorVal;
-        while ((consumeCursorVal = consumeCursor.get()) < publishCursor.get()) {
-            BufferQueueEntry entry = mappedEntries.getEntry(consumeCursorVal);
-            if (!entry.isPublished() || !entry.isConsumed()) {
-                break;
-            }
-            consumeCursor.compareAndSet(consumeCursorVal, consumeCursorVal + 1);
-        }
-        return consumeCursorVal;
     }
 
     @Override
@@ -206,6 +192,12 @@ public class MappedBufferQueue implements BufferQueue {
         }
 
         return bufferQueueEntries;
+    }
+
+    @Override
+    public int maxDataLength() {
+        // TODO: should subtract internal overhead
+        return Byte.MAX_VALUE * blockSize;
     }
 
     @Override
