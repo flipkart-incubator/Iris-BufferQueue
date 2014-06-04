@@ -57,8 +57,8 @@ class MappedHeader {
 
     void format(int maxDataLength) {
         headerBuffer.putInt((int) OFFSET_MAX_MSG_LENGTH, maxDataLength);
-        headerBuffer.putLong((int) OFFSET_READ_CURSOR, 0);
-        headerBuffer.putLong((int) OFFSET_WRITE_CURSOR, 0);
+        headerBuffer.putLong((int) OFFSET_READ_CURSOR, 1);
+        headerBuffer.putLong((int) OFFSET_WRITE_CURSOR, 1);
     }
 
     public int maxDataLength() {

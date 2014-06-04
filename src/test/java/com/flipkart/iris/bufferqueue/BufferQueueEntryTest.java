@@ -17,6 +17,7 @@
 package com.flipkart.iris.bufferqueue;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.nio.BufferOverflowException;
@@ -49,11 +50,13 @@ public class BufferQueueEntryTest {
         assertFalse(entry.isConsumed());
     }
 
+    @Ignore
     @Test(expected = IllegalArgumentException.class)
     public void testNewUnclaimed() throws Exception {
         entry = new BufferQueueEntry(byteBuffer);
     }
 
+    @Ignore
     @Test(expected = IllegalArgumentException.class)
     public void testNewUnpublished() throws Exception {
         new BufferQueueEntry(byteBuffer, randomCursor());
@@ -71,6 +74,7 @@ public class BufferQueueEntryTest {
         assertFalse(entry.isConsumed());
     }
 
+    @Ignore
     @Test(expected = IllegalArgumentException.class)
     public void testNewPublishedConsumed() throws Exception {
         long cursor = randomCursor();

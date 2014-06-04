@@ -16,6 +16,8 @@
 
 package com.flipkart.iris.bufferqueue.mmapped;
 
+import com.flipkart.iris.bufferqueue.BufferQueueEntry;
+import com.google.common.base.Optional;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -24,6 +26,7 @@ import java.io.File;
 import java.util.UUID;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 public class MappedBufferQueueTest {
 
@@ -49,6 +52,9 @@ public class MappedBufferQueueTest {
     public void testSimplePublishConsume() throws Exception {
         byte[] msg = UUID.randomUUID().toString().getBytes();
         bufferQueue.publish(msg);
-        assertArrayEquals(msg, bufferQueue.consume().get().get());
+        BufferQueueEntry bufferQueueEntry = bufferQueue.consume().get();
+        assertArrayEquals(msg, bufferQueueEntry.get());
+        bufferQueueEntry.markConsumed();
+        assertEquals(Optional.<BufferQueueEntry>absent(), bufferQueue.consume());
     }
 }

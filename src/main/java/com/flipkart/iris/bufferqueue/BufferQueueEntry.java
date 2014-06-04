@@ -94,10 +94,6 @@ public class BufferQueueEntry {
     public BufferQueueEntry(ByteBuffer buf) {
         this.buf = buf;
         this.cursor = buf.getLong(OFFSET_CURSOR);
-
-        if (this.cursor <= 0) {
-            throw new IllegalArgumentException("The given buffer entry does not represent a \"published, but not yet consumed\" entry");
-        }
     }
 
     /**

@@ -57,8 +57,8 @@ public class MappedBufferQueue implements BufferQueue {
     public static final long SYNC_INTERVAL = 1000; // milliseconds
 
     private final Integer maxDataLength;
-    private final AtomicLong readCursor = new AtomicLong(0);
-    private final AtomicLong writeCursor = new AtomicLong(0);
+    private final AtomicLong readCursor = new AtomicLong(1);
+    private final AtomicLong writeCursor = new AtomicLong(1);
 
     private final File file;
     private final ByteBuffer fileBuffer;
@@ -143,7 +143,7 @@ public class MappedBufferQueue implements BufferQueue {
             }
         }
 
-        long n = writeCursor.incrementAndGet();
+        long n = writeCursor.getAndIncrement();
         return Optional.of(mappedEntries.makeEntry(n));
     }
 
@@ -178,8 +178,11 @@ public class MappedBufferQueue implements BufferQueue {
     @Override
     public Optional<BufferQueueEntry> consume() {
         long readCursorVal = forwardReadCursor();
-        if (readCursorVal <= writeCursor.get()) {
-            return Optional.of(mappedEntries.getEntry(readCursorVal));
+        if (readCursorVal < writeCursor.get()) {
+            BufferQueueEntry entry = mappedEntries.getEntry(readCursorVal);
+            if (entry.isPublished()) {
+                return Optional.of(entry);
+            }
         }
         return Optional.absent();
     }
