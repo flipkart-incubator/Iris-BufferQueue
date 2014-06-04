@@ -164,9 +164,11 @@ public class MappedBufferQueue implements BufferQueue {
     public long forwardReadCursor() {
         long readCursorVal;
         while ((readCursorVal = readCursor.get()) < writeCursor.get()) {
-            BufferQueueEntry entry = mappedEntries.getEntry(readCursorVal);
-            if (!entry.isPublished() || !entry.isConsumed()) {
-                break;
+            if (readCursorVal > 0) {
+                BufferQueueEntry entry = mappedEntries.getEntry(readCursorVal);
+                if (!entry.isPublished() || !entry.isConsumed()) {
+                    break;
+                }
             }
             readCursor.compareAndSet(readCursorVal, readCursorVal + 1);
         }
@@ -176,7 +178,7 @@ public class MappedBufferQueue implements BufferQueue {
     @Override
     public Optional<BufferQueueEntry> consume() {
         long readCursorVal = forwardReadCursor();
-        if (readCursorVal < writeCursor.get()) {
+        if (readCursorVal <= writeCursor.get()) {
             return Optional.of(mappedEntries.getEntry(readCursorVal));
         }
         return Optional.absent();
