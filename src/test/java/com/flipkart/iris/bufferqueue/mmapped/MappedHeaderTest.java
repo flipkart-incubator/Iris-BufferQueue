@@ -26,11 +26,11 @@ import static org.junit.Assert.assertEquals;
 public class MappedHeaderTest {
 
     public static final int MAX_DATA_LENGTH = 2048;
-    MappedHeader mappedHeader;
+    MappedBufferQueue.MappedHeader mappedHeader;
 
     @Before
     public void setUp() throws Exception {
-        mappedHeader = new MappedHeader(ByteBuffer.allocate(MappedHeader.HEADER_LENGTH));
+        mappedHeader = new MappedBufferQueue.MappedHeader(ByteBuffer.allocate(MappedBufferQueue.MappedHeader.HEADER_LENGTH));
         mappedHeader.format(MAX_DATA_LENGTH);
     }
 

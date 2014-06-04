@@ -18,6 +18,7 @@ package com.flipkart.iris.bufferqueue;
 
 import com.google.common.base.Optional;
 
+import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.util.List;
 
@@ -32,7 +33,7 @@ import java.util.List;
  *
  * Enqueuing/publishing data to the queue is a 3-step process:
  * <ol>
- *      <li>"Claim" a new entry using the method {@link #next()}</li>
+ *      <li>"Claim" a new entry using the method {@link #claim()}</li>
  *      <li>Write the data to the returned {@link BufferQueueEntry} using any method that it offers</li>
  *      <li>Mark the entry as published by calling {@link BufferQueueEntry#markPublished()}</li>
  * </ol>
@@ -40,13 +41,13 @@ import java.util.List;
  * Alternatively, calling {@link #publish(byte[] data)} will
  * internally do all these steps automatically. <br/><br/>
  *
- * Multiple {@link #next()}/{@link #publish(byte[] data)} calls could
+ * Multiple {@link #claim()}/{@link #publish(byte[] data)} calls could
  * be happening in parallel and entries must be made available for consumption
  * in the order in which they were claimed. <br/><br/>
  *
  * Dequeueing/consuming data from the queue is also a 3-step process:
  * <ol>
- *      <li>Get the next entry to be consumed from the queue by calling {@link #consume()}</li>
+ *      <li>Get the next entry to be consumed from the queue by calling {@link #peek()}</li>
  *      <li>Read and consume the data from the returned {@link BufferQueueEntry}</li>
  *      <li>Mark the entry as consumed by calling {@link BufferQueueEntry#markConsumed()}</li>
  * </ol>
@@ -57,7 +58,7 @@ import java.util.List;
  * make sense to consume in parallel -- the same entry will be delivered to multiple
  * queues. <br/><br/>
  *
- * There is also a batch consume API in the form of the method {@link #consume(int n)}
+ * There is also a batch consume API in the form of the method {@link #peek(int n)}
  * that allows consumption of multiple entries (up to <code>n</code>) at the same time.
  * This can also be used to parallelize consumption -- get a batch of entries and then
  * hand them off to a separate set of worker threads to process. Please note that this
@@ -67,6 +68,8 @@ import java.util.List;
  *
  */
 public interface BufferQueue {
+
+    void close() throws IOException;
 
     /**
      * Claim the next entry in the buffer queue. <br/>
@@ -95,17 +98,17 @@ public interface BufferQueue {
      *          if claiming failed (may happen if the buffer is full, for example).
      * @see BufferQueueEntry#markPublished()
      */
-    Optional<BufferQueueEntry> next();
+    Optional<? extends BufferQueueEntry> claim();
 
     /**
      * Claim the next entry in the buffer queue to write data of given size. <br/><br/>
      *
-     * Similar care needs to be taken when using this method as that which is required when using {@link #next()}. See
+     * Similar care needs to be taken when using this method as that which is required when using {@link #claim()}. See
      * the docs for that to understand these care instructions.
      *
-     * @see #next()
+     * @see #claim()
      */
-     Optional<BufferQueueEntry> nextFor(int dataSize);
+     Optional<? extends BufferQueueEntry> claimFor(int dataSize);
 
     /**
      * A higher level helper method to do all the 3-steps of publishing
@@ -115,7 +118,7 @@ public interface BufferQueue {
      * @param data The data to publish as an entry.
      * @return
      * @throws BufferOverflowException If the given data does not fit in a single entry.
-     * @see #next()
+     * @see #claim()
      */
     boolean publish(byte[] data) throws BufferOverflowException;
 
@@ -147,7 +150,7 @@ public interface BufferQueue {
      *          entry is corrupted for any unknown reason.
      * @see BufferQueueEntry#markConsumed()
      */
-    Optional<BufferQueueEntry> consume();
+    Optional<? extends BufferQueueEntry> peek();
 
     /**
      * Return the next (up to) <code>n</code> consumable entries from the BufferQueue. <br/><br/>
@@ -155,7 +158,7 @@ public interface BufferQueue {
      * Less than <code>n</code> entries (including <code>zero</code> entries) may be
      * returned based on how many entries are currently available. <br/><br/>
      *
-     * The same set of contracts as specified in {@link #consume()} apply to this
+     * The same set of contracts as specified in {@link #peek()} apply to this
      * method as well. <br/><br/>
      *
      * The returned messages may be marked as consumed out of order. This allows the
@@ -164,9 +167,12 @@ public interface BufferQueue {
      *
      * @param n The number of entries to return.
      * @return A list of up to <code>n</code> entries.
-     * @see #consume()
+     * @see #peek()
      */
-    List<BufferQueueEntry> consume(int n);
+    List<? extends BufferQueueEntry> peek(int n);
+
+    Optional<byte[]> consume();
+    List<byte[]> consume(int n);
 
     /**
      * BufferQueue implementations may have a max size of data that they accept.
@@ -179,12 +185,11 @@ public interface BufferQueue {
 
     /**
      * BufferQueue implementations may have a upper limit on the number of
-     * unconsumed messages they will hold. This limit is referred to as its
-     * capacity.
+     * unconsumed messages they will hold.
      *
      * @return The max number of unconsumed messages this BufferQueue will hold.
      */
-    long capacity();
+    long maxNumEntries();
 
     /**
      * Returns the number of unconsumed entries that this BufferQueue currently
@@ -201,15 +206,15 @@ public interface BufferQueue {
 
     /**
      * Check if the BufferQueue is "full" that is if it has any more
-     * capacity to accept newer entries before any more entries are
+     * maxNumEntries to accept newer entries before any more entries are
      * consumed. <br/><br/>
      *
      * For certain implementations of BufferQueue it may be more efficient
      * to call this method than call figure this out by calling
-     * {@link #capacity()} and {@link #size()}.
+     * {@link #maxNumEntries()} and {@link #size()}.
      *
      * @return <code>true</code> if the BufferQueue is full, <code>false</code> otherwise
-     * @see #capacity()
+     * @see #maxNumEntries()
      */
     boolean isFull();
 
@@ -225,4 +230,10 @@ public interface BufferQueue {
      * @see #size()
      */
     boolean isEmpty();
+
+    public static class ClosedBufferQueueException extends RuntimeException {
+        public ClosedBufferQueueException() {
+            super("Attempting to use a closed BufferQueue");
+        }
+    }
 }

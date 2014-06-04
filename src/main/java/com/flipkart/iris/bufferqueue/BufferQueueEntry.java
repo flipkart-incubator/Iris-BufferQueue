@@ -40,64 +40,19 @@ import java.util.Arrays;
  * across threads, access must be synchronized.
  */
 @NotThreadSafe
-public class BufferQueueEntry {
+public abstract class BufferQueueEntry {
 
     private static final HashFunction checksum = Hashing.crc32();
     private static final int CHECKSUM_BYTES = checksum.bits() / Byte.SIZE;
 
-    @VisibleForTesting static final int OFFSET_CURSOR = 0;
-    @VisibleForTesting static final int OFFSET_LENGTH = OFFSET_CURSOR + Long.SIZE;
+    @VisibleForTesting static final int OFFSET_LENGTH = 0;
     @VisibleForTesting static final int OFFSET_CHECKSUM = OFFSET_LENGTH + Integer.SIZE;
     @VisibleForTesting static final int OFFSET_DATA = OFFSET_CHECKSUM + CHECKSUM_BYTES;
 
-    private static final long CURSOR_UNPUBLISHED = 0l;
-    private static final long CURSOR_CONSUMED = -1l;
-
     private final ByteBuffer buf;
 
-    @VisibleForTesting
-    long cursor;
-
-    /**
-     * To be used when claiming a new entry. The returned entity will be "Claimed, but not yet published". <br/><br/>
-     *
-     * The argument <code>buf</code> will be used as the backing <code>ByteBuffer</code> for this entry.
-     * The argument <code>cursor</code> will be set as the cursor for this entry but it won't be written into
-     * <code>buf</code> until the entry is marked as published (after data is written to it). <br/><br/>
-     *
-     * This constructor is part of the internal API and shouldn't be used by clients.
-     * Instead, clients should get instances of <code>BufferQueueEntry</code>s from implementations of
-     * {@link com.flipkart.iris.bufferqueue.BufferQueue}.
-     *
-     * @param buf The <code>ByteBuffer</code> representing an entry.
-     * @param cursor The cursor for this entry.
-     */
-    public BufferQueueEntry(ByteBuffer buf, long cursor) {
-        this.buf = buf;
-        this.cursor = cursor;
-        buf.putLong(OFFSET_CURSOR, CURSOR_UNPUBLISHED);
-    }
-
-    /**
-     * To be used for entries that are "Published, but not yet consumed". <br/><br/>
-     *
-     * The argument <code>buf</code> must thus represent such an entry.
-     * The entry's <code>cursor</code> will be read from the buf. <br/><br/>
-     *
-     * This constructor is part of the internal API and shouldn't be used by clients.
-     * Instead, clients should get instances of <code>BufferQueueEntry</code>s from implementations of
-     * {@link com.flipkart.iris.bufferqueue.BufferQueue}.
-     *
-     * @param buf The <code>ByteBuffer</code> representing an entry.
-     * @throws IllegalStateException If <code>buf</code> does not represent a "Published, but not yet consumed" entry.
-     */
     public BufferQueueEntry(ByteBuffer buf) {
         this.buf = buf;
-        this.cursor = buf.getLong(OFFSET_CURSOR);
-
-        if (this.cursor <= 0) {
-            throw new IllegalArgumentException("The given buffer entry does not represent a \"published, but not yet consumed\" entry");
-        }
     }
 
     /**
@@ -140,18 +95,14 @@ public class BufferQueueEntry {
      *
      * See {@link #set(byte[])} for best practices around how to call this method.
      */
-    public void markPublished() {
-        writeCursor(cursor);
-    }
+    public abstract void markPublished();
 
     /**
      * Check if the entry is marked as published or not.
      *
      * @return <code>true</code> if the entry is marked as published, <code>false</code> otherwise.
      */
-    public boolean isPublished() {
-        return readCursor() != CURSOR_UNPUBLISHED;
-    }
+    public abstract boolean isPublished();
 
     /**
      * Get the length of the data in this entry.
@@ -219,38 +170,14 @@ public class BufferQueueEntry {
      *
      * See {@link #get()} for best practices around how to call this method.
      */
-    public void markConsumed() {
-        writeCursor(CURSOR_CONSUMED);
-    }
+    public abstract void markConsumed();
 
     /**
      * Check if the entry is marked as consumed or not.
      *
      * @return <code>true</code> if the entry is marked as consumed, <code>false</code> otherwise.
      */
-    public boolean isConsumed() {
-        return readCursor() == CURSOR_CONSUMED;
-    }
-
-    /**
-     * Get the cursor value written in the backing buffer.
-     *
-     * @return The cursor value.
-     */
-    @VisibleForTesting
-    long readCursor() {
-        return buf.getLong(OFFSET_CURSOR);
-    }
-
-    /**
-     * Write the cursor value to the backing buffer.
-     *
-     * @param cursor The cursor value to write.
-     */
-    @VisibleForTesting
-    void writeCursor(long cursor) {
-        buf.putLong(OFFSET_CURSOR, cursor);
-    }
+    public abstract boolean isConsumed();
 
     /**
      * Given message data length to be be written, calculate the size of the byte buffer that must be used for
@@ -264,4 +191,6 @@ public class BufferQueueEntry {
     public static int calculateEntryLength(int messageDataLength) {
         return OFFSET_DATA + messageDataLength;
     }
+
+    public static int metadataOverhead() { return OFFSET_DATA; }
 }
