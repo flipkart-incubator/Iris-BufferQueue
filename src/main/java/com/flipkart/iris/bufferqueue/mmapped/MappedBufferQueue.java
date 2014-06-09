@@ -63,6 +63,7 @@ public class MappedBufferQueue implements BufferQueue {
     private final AtomicLong consumeCursor = new AtomicLong(0);
     private final AtomicLong publishCursor = new AtomicLong(0);
 
+    private final File file;
     private final HeaderSyncThread headerSyncThread;
     private final RandomAccessFile randomAccessFile;
     private final FileChannel fileChannel;
@@ -110,8 +111,9 @@ public class MappedBufferQueue implements BufferQueue {
 
         long fileSize = fileExists ? builder.file.length() : builder.fileSize;
 
-        ByteBuffer fileBuffer = Helper.mapFile(builder.file, fileSize); // creates file if it doesn't already exist
-        randomAccessFile = new RandomAccessFile(builder.file, "rw");
+        this.file = builder.file;
+        ByteBuffer fileBuffer = Helper.mapFile(file, fileSize); // creates file if it doesn't already exist
+        randomAccessFile = new RandomAccessFile(file, "rw");
         this.fileChannel = randomAccessFile.getChannel();
 
         this.mappedHeader = getHeaderBuffer(fileBuffer);
@@ -142,6 +144,10 @@ public class MappedBufferQueue implements BufferQueue {
     private MappedEntries getEntriesBuffer(ByteBuffer fileBuffer) {
         ByteBuffer entriesBuffer = subBuffer(fileBuffer, MappedHeader.HEADER_LENGTH);
         return new MappedEntries(entriesBuffer);
+    }
+
+    public File getFile() {
+        return file;
     }
 
     @Override
