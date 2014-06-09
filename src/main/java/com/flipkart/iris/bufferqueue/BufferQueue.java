@@ -98,7 +98,7 @@ public interface BufferQueue {
      *          if claiming failed (may happen if the buffer is full, for example).
      * @see BufferQueueEntry#markPublished()
      */
-    Optional<? extends BufferQueueEntry> claim();
+    Optional<? extends BufferQueueEntry> claim() throws IOException;
 
     /**
      * Claim the next entry in the buffer queue to write data of given size. <br/><br/>
@@ -108,7 +108,7 @@ public interface BufferQueue {
      *
      * @see #claim()
      */
-     Optional<? extends BufferQueueEntry> claimFor(int dataSize);
+     Optional<? extends BufferQueueEntry> claimFor(int dataSize) throws IOException;
 
     /**
      * A higher level helper method to do all the 3-steps of publishing
@@ -120,7 +120,7 @@ public interface BufferQueue {
      * @throws BufferOverflowException If the given data does not fit in a single entry.
      * @see #claim()
      */
-    boolean publish(byte[] data) throws BufferOverflowException;
+    boolean publish(byte[] data) throws BufferOverflowException, IOException;
 
     /**
      * Return the next consumable entry from the BufferQueue. <br/><br/>
@@ -150,7 +150,7 @@ public interface BufferQueue {
      *          entry is corrupted for any unknown reason.
      * @see BufferQueueEntry#markConsumed()
      */
-    Optional<? extends BufferQueueEntry> peek();
+    Optional<? extends BufferQueueEntry> peek() throws IOException;
 
     /**
      * Return the next (up to) <code>n</code> consumable entries from the BufferQueue. <br/><br/>
@@ -169,10 +169,10 @@ public interface BufferQueue {
      * @return A list of up to <code>n</code> entries.
      * @see #peek()
      */
-    List<? extends BufferQueueEntry> peek(int n);
+    List<? extends BufferQueueEntry> peek(int n) throws IOException;
 
-    Optional<byte[]> consume();
-    List<byte[]> consume(int n);
+    Optional<byte[]> consume() throws IOException;
+    List<byte[]> consume(int n) throws IOException;
 
     /**
      * BufferQueue implementations may have a max size of data that they accept.
@@ -181,7 +181,7 @@ public interface BufferQueue {
      *
      * @return The maximum length of data this BufferQueue can accomodate.
      */
-    int maxDataLength();
+    int maxDataLength() throws IOException;
 
     /**
      * BufferQueue implementations may have a upper limit on the number of
@@ -202,7 +202,7 @@ public interface BufferQueue {
 
      * @return The current -- approximate -- size of the queue.
      */
-    long size();
+    long size() throws IOException;
 
     /**
      * Check if the BufferQueue is "full" that is if it has any more
@@ -216,7 +216,7 @@ public interface BufferQueue {
      * @return <code>true</code> if the BufferQueue is full, <code>false</code> otherwise
      * @see #maxNumEntries()
      */
-    boolean isFull();
+    boolean isFull() throws IOException;
 
     /**
      * Check if the BufferQueue has any consumable entries. This may be
@@ -229,7 +229,7 @@ public interface BufferQueue {
      * @return <code>true</code> if the BufferQueue is empty, <code>false</code> otherwise
      * @see #size()
      */
-    boolean isEmpty();
+    boolean isEmpty() throws IOException;
 
     public static class ClosedBufferQueueException extends RuntimeException {
         public ClosedBufferQueueException() {
