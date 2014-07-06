@@ -33,21 +33,21 @@ import java.util.List;
  *
  * Enqueuing/publishing data to the queue is a 3-step process:
  * <ol>
- *      <li>"Claim" a new entry using the method {@link #claim()}</li>
+ *      <li>"Claim" a new entry using the method {@link Publisher#claim()}</li>
  *      <li>Write the data to the returned {@link BufferQueueEntry} using any method that it offers</li>
  *      <li>Mark the entry as published by calling {@link BufferQueueEntry#markPublished()}</li>
  * </ol>
  *
- * Alternatively, calling {@link #publish(byte[] data)} will
+ * Alternatively, calling {@link Publisher#publish(byte[] data)} will
  * internally do all these steps automatically. <br/><br/>
  *
- * Multiple {@link #claim()}/{@link #publish(byte[] data)} calls could
+ * Multiple {@link Publisher#claim()}/{@link Publisher#publish(byte[] data)} calls could
  * be happening in parallel and entries must be made available for consumption
  * in the order in which they were claimed. <br/><br/>
  *
  * Dequeueing/consuming data from the queue is also a 3-step process:
  * <ol>
- *      <li>Get the next entry to be consumed from the queue by calling {@link #peek()}</li>
+ *      <li>Get the next entry to be consumed from the queue by calling {@link Consumer#peek()}</li>
  *      <li>Read and consume the data from the returned {@link BufferQueueEntry}</li>
  *      <li>Mark the entry as consumed by calling {@link BufferQueueEntry#markConsumed()}</li>
  * </ol>
@@ -58,7 +58,7 @@ import java.util.List;
  * make sense to consume in parallel -- the same entry will be delivered to multiple
  * queues. <br/><br/>
  *
- * There is also a batch consume API in the form of the method {@link #peek(int n)}
+ * There is also a batch consume API in the form of the method {@link Consumer#peek(int n)}
  * that allows consumption of multiple entries (up to <code>n</code>) at the same time.
  * This can also be used to parallelize consumption -- get a batch of entries and then
  * hand them off to a separate set of worker threads to process. Please note that this
@@ -69,110 +69,123 @@ import java.util.List;
  */
 public interface BufferQueue {
 
+    Publisher publisher() throws IllegalStateException, IOException;
+    Consumer consumer() throws IllegalStateException, IOException;
+
     void close() throws IOException;
 
-    /**
-     * Claim the next entry in the buffer queue. <br/>
-     *
-     * Important: The publisher **must** call {@link BufferQueueEntry#markPublished()}
-     * on the returned {@link BufferQueueEntry}, otherwise no consumer
-     * will be able to move past this point. <br/><br/>
-     *
-     * {@link BufferQueueEntry#markPublished()} **must** be called even if writing data
-     * to the buffer failed. It is recommended that this method be called in a
-     * <code>finally</code> block; for example:
-     *
-     * <pre>
-     * <code>
-     *      BufferQueueEntry entry = bufferQueue.next();
-     *      try {
-     *          // entry.set(data);
-     *      }
-     *      finally {
-     *          entry.markPublished();
-     *      }
-     * </code>
-     * </pre>
-     *
-     * @return The claimed entry. The reference will be absent in the Optional
-     *          if claiming failed (may happen if the buffer is full, for example).
-     * @see BufferQueueEntry#markPublished()
-     */
-    Optional<? extends BufferQueueEntry> claim() throws IOException;
+    public interface Publisher {
 
-    /**
-     * Claim the next entry in the buffer queue to write data of given size. <br/><br/>
-     *
-     * Similar care needs to be taken when using this method as that which is required when using {@link #claim()}. See
-     * the docs for that to understand these care instructions.
-     *
-     * @see #claim()
-     */
-     Optional<? extends BufferQueueEntry> claimFor(int dataSize) throws IOException;
+        BufferQueue bufferQueue();
 
-    /**
-     * A higher level helper method to do all the 3-steps of publishing
-     * to the BufferQueue in a single method call. This claims a new entry,
-     * writes data to the entry and then marks it as published.
-     *
-     * @param data The data to publish as an entry.
-     * @return
-     * @throws BufferOverflowException If the given data does not fit in a single entry.
-     * @see #claim()
-     */
-    boolean publish(byte[] data) throws BufferOverflowException, IOException;
+        /**
+         * Claim the next entry in the buffer queue. <br/>
+         *
+         * Important: The publisher **must** call {@link BufferQueueEntry#markPublished()}
+         * on the returned {@link BufferQueueEntry}, otherwise no consumer
+         * will be able to move past this point. <br/><br/>
+         *
+         * {@link BufferQueueEntry#markPublished()} **must** be called even if writing data
+         * to the buffer failed. It is recommended that this method be called in a
+         * <code>finally</code> block; for example:
+         *
+         * <pre>
+         * <code>
+         *      BufferQueueEntry entry = bufferQueue.next();
+         *      try {
+         *          // entry.set(data);
+         *      }
+         *      finally {
+         *          entry.markPublished();
+         *      }
+         * </code>
+         * </pre>
+         *
+         * @return The claimed entry. The reference will be absent in the Optional
+         *          if claiming failed (may happen if the buffer is full, for example).
+         * @see BufferQueueEntry#markPublished()
+         */
+        Optional<? extends BufferQueueEntry> claim() throws IOException;
 
-    /**
-     * Return the next consumable entry from the BufferQueue. <br/><br/>
-     *
-     * Note that until the returned entry is marked as consumed, the same
-     * entry will be returned for each call, even if different threads make
-     * the call. <br/><br/>
-     *
-     * Thus consumers **must** call {@link BufferQueueEntry#markConsumed} on the returned
-     * {@link BufferQueueEntry}. It is recommended that this method be
-     * called in a <code>finally</code> block; for example:
-     *
-     * <pre>
-     * <code>
-     *      BufferQueueEntry entry = bufferQueue.consume();
-     *      try {
-     *          // consume the data from entry
-     *      }
-     *      finally {
-     *          entry.markConsumed();
-     *      }
-     * </code>
-     * </pre>
-     *
-     * @return The consumable {@link BufferQueueEntry}, null if
-     *          no consumable entries are currently available or if the next
-     *          entry is corrupted for any unknown reason.
-     * @see BufferQueueEntry#markConsumed()
-     */
-    Optional<? extends BufferQueueEntry> peek() throws IOException;
+        /**
+         * Claim the next entry in the buffer queue to write data of given size. <br/><br/>
+         *
+         * Similar care needs to be taken when using this method as that which is required when using {@link #claim()}. See
+         * the docs for that to understand these care instructions.
+         *
+         * @see #claim()
+         */
+        Optional<? extends BufferQueueEntry> claimFor(int dataSize) throws IOException;
 
-    /**
-     * Return the next (up to) <code>n</code> consumable entries from the BufferQueue. <br/><br/>
-     *
-     * Less than <code>n</code> entries (including <code>zero</code> entries) may be
-     * returned based on how many entries are currently available. <br/><br/>
-     *
-     * The same set of contracts as specified in {@link #peek()} apply to this
-     * method as well. <br/><br/>
-     *
-     * The returned messages may be marked as consumed out of order. This allows the
-     * consumer to parallelize consumption of the messages (over a thread-pool, for
-     * example).
-     *
-     * @param n The number of entries to return.
-     * @return A list of up to <code>n</code> entries.
-     * @see #peek()
-     */
-    List<? extends BufferQueueEntry> peek(int n) throws IOException;
+        /**
+         * A higher level helper method to do all the 3-steps of publishing
+         * to the BufferQueue in a single method call. This claims a new entry,
+         * writes data to the entry and then marks it as published.
+         *
+         * @param data The data to publish as an entry.
+         * @return
+         * @throws BufferOverflowException If the given data does not fit in a single entry.
+         * @see #claim()
+         */
+        boolean publish(byte[] data) throws BufferOverflowException, IOException;
+    }
 
-    Optional<byte[]> consume() throws IOException;
-    List<byte[]> consume(int n) throws IOException;
+    public interface Consumer {
+
+        BufferQueue bufferQueue();
+
+        /**
+         * Return the next consumable entry from the BufferQueue. <br/><br/>
+         *
+         * Note that until the returned entry is marked as consumed, the same
+         * entry will be returned for each call, even if different threads make
+         * the call. <br/><br/>
+         *
+         * Thus consumers **must** call {@link BufferQueueEntry#markConsumed} on the returned
+         * {@link BufferQueueEntry}. It is recommended that this method be
+         * called in a <code>finally</code> block; for example:
+         *
+         * <pre>
+         * <code>
+         *      BufferQueueEntry entry = bufferQueue.consume();
+         *      try {
+         *          // consume the data from entry
+         *      }
+         *      finally {
+         *          entry.markConsumed();
+         *      }
+         * </code>
+         * </pre>
+         *
+         * @return The consumable {@link BufferQueueEntry}, null if
+         *          no consumable entries are currently available or if the next
+         *          entry is corrupted for any unknown reason.
+         * @see BufferQueueEntry#markConsumed()
+         */
+        Optional<? extends BufferQueueEntry> peek() throws IOException;
+
+        /**
+         * Return the next (up to) <code>n</code> consumable entries from the BufferQueue. <br/><br/>
+         *
+         * Less than <code>n</code> entries (including <code>zero</code> entries) may be
+         * returned based on how many entries are currently available. <br/><br/>
+         *
+         * The same set of contracts as specified in {@link #peek()} apply to this
+         * method as well. <br/><br/>
+         *
+         * The returned messages may be marked as consumed out of order. This allows the
+         * consumer to parallelize consumption of the messages (over a thread-pool, for
+         * example).
+         *
+         * @param n The number of entries to return.
+         * @return A list of up to <code>n</code> entries.
+         * @see #peek()
+         */
+        List<? extends BufferQueueEntry> peek(int n) throws IOException;
+
+        Optional<byte[]> consume() throws IOException;
+        List<byte[]> consume(int n) throws IOException;
+    }
 
     /**
      * BufferQueue implementations may have a max size of data that they accept.

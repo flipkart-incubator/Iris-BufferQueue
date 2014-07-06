@@ -19,8 +19,10 @@ package com.flipkart.iris.bufferqueue.mmapped;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.nio.ByteBuffer;
 
+import static com.flipkart.iris.bufferqueue.mmapped.MappedBufferQueue.*;
 import static org.junit.Assert.assertEquals;
 
 public class MappedHeaderTest {
@@ -30,7 +32,13 @@ public class MappedHeaderTest {
 
     @Before
     public void setUp() throws Exception {
-        mappedHeader = new MappedBufferQueue.MappedHeader(ByteBuffer.allocate(MappedBufferQueue.MappedHeader.HEADER_LENGTH));
+        File file = File.createTempFile("bufferqueue-test", Long.toString(System.nanoTime()));
+        file.delete();
+        MappedBufferQueue bufferQueue = new Builder(file)
+                .formatIfNotExists(1000000, 1024)
+                .headerSyncInterval(10)
+                .build();
+        mappedHeader = bufferQueue.mappedHeader;
         mappedHeader.format(MAX_DATA_LENGTH);
     }
 

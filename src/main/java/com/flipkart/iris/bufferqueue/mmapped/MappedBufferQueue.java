@@ -23,6 +23,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
+import javax.swing.tree.RowMapper;
 import javax.validation.constraints.NotNull;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -33,6 +34,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -55,22 +59,23 @@ public class MappedBufferQueue implements BufferQueue {
      * the header. If the application crashes, messages corresponding to
      * the un-synced cursors may be lost.
      *
-     * @see MappedBufferQueue.HeaderSyncThread
      */
     public static final int DEFAULT_SYNC_INTERVAL = 10; // milliseconds
 
     private final Integer blockSize;
-    private final AtomicLong consumeCursor = new AtomicLong(0);
-    private final AtomicLong publishCursor = new AtomicLong(0);
+    public final AtomicLong consumeCursor = new AtomicLong(0);
+    public final AtomicLong publishCursor = new AtomicLong(0);
 
     private final File file;
-    private final HeaderSyncThread headerSyncThread;
+    private final int headerSyncInterval;
     private final RandomAccessFile randomAccessFile;
     private final FileChannel fileChannel;
     private boolean isClosed;
 
-    private final MappedHeader mappedHeader;
+    @VisibleForTesting final MappedHeader mappedHeader;
     private final MappedEntries mappedEntries;
+    private Publisher publisher;
+    private Consumer consumer;
 
 
     public static class Builder {
@@ -91,6 +96,8 @@ public class MappedBufferQueue implements BufferQueue {
         }
 
         public Builder formatIfNotExists(int fileSize, int blockSize) {
+            Preconditions.checkArgument(blockSize > metadataOverhead(), "blockSize must be greater than " + metadataOverhead());
+
             formatIfNotExists = true;
             this.blockSize = blockSize;
             this.fileSize = fileSize;
@@ -132,8 +139,7 @@ public class MappedBufferQueue implements BufferQueue {
         consumeCursor.set(mappedHeader.readConsumeCursor());
         publishCursor.set(mappedHeader.readPublishCursor());
 
-        headerSyncThread = new HeaderSyncThread(builder.headerSyncInterval);
-        headerSyncThread.start();
+        this.headerSyncInterval = builder.headerSyncInterval;
     }
 
     private MappedHeader getHeaderBuffer(ByteBuffer fileBuffer) {
@@ -151,10 +157,34 @@ public class MappedBufferQueue implements BufferQueue {
     }
 
     @Override
+    public BufferQueue.Publisher publisher() throws IllegalStateException, IOException {
+        if (publisher == null) {
+            synchronized (this) {
+                if (publisher == null) {
+                    publisher = new Publisher();
+                }
+            }
+        }
+        return publisher;
+    }
+
+    @Override
+    public BufferQueue.Consumer consumer() throws IllegalStateException, IOException {
+        if (consumer == null) {
+            synchronized (this) {
+                if (consumer == null) {
+                    consumer = new Consumer();
+                }
+            }
+        }
+        return consumer;
+    }
+
+    @Override
     public void close() throws IOException {
         if (!isClosed) {
-            headerSyncThread.disable();
-            syncHeader();
+            if (publisher != null) publisher.close();
+            if (consumer != null) consumer.close();
             randomAccessFile.close();
             fileChannel.close();
             isClosed = true;
@@ -167,134 +197,241 @@ public class MappedBufferQueue implements BufferQueue {
         }
     }
 
-    public long forwardConsumeCursor() {
-        long consumeCursorVal;
-        while ((consumeCursorVal = consumeCursor.get()) < publishCursor.get()) {
-            MappedBufferQueueEntry entry = mappedEntries.getEntry(consumeCursorVal);
-            if (!entry.isPublished() || !entry.isConsumed()) {
-                break;
-            }
-            consumeCursor.compareAndSet(consumeCursorVal, consumeCursorVal + 1);
+    void printBufferSkeleton() {
+        System.out.println("ConsumeCursor: " + consumeCursor.get() + " PublishCursor: " + publishCursor.get());
+        for (long i = consumeCursor.get(); i < publishCursor.get();) {
+            MappedBufferQueueEntry entry = mappedEntries.getEntry(i);
+            System.out.println("Cursor: " + i +
+                    ", nextCursor: " + entry.nextCursor +
+                    ", isPublished: " + entry.isPublished() +
+                    ", isConsumed: " + entry.isConsumed());
+            i = entry.nextCursor;
         }
-        return consumeCursorVal;
     }
 
-    /**
-     * Claim the next entry in the buffer queue, ensuring that it spans across the given number of blocks. <br/><br/>
-     *
-     * Similar care needs to be taken when using this method as that which is required when using {@link #claim()}. See
-     * the docs for that method to understand these care instructions.
-     *
-     * @see #claim()
-     */
-    public Optional<MappedBufferQueueEntry> claim(byte numBlocks) {
-        checkNotClosed();
-        long n;
-        do {
-            n = publishCursor.get();
-            if (n - consumeCursor.get() >= maxNumEntries() - numBlocks) {
-                // TODO: decide if we really do want to do this
-                forwardConsumeCursor();
-                if (n - consumeCursor.get() >= maxNumEntries() - numBlocks) {
-                    return Optional.absent();
+    public class Publisher implements BufferQueue.Publisher {
+
+        private final FileLock fileLock;
+        private final ScheduledExecutorService executorService;
+
+        public Publisher() throws IOException {
+            fileLock = mappedHeader.lockPublishing();
+            executorService = Executors.newSingleThreadScheduledExecutor();
+            executorService.scheduleAtFixedRate(new Syncer(), headerSyncInterval, headerSyncInterval, TimeUnit.MILLISECONDS);
+        }
+
+        @Override
+        public BufferQueue bufferQueue() {
+            return MappedBufferQueue.this;
+        }
+
+        /**
+         * Claim the next entry in the buffer queue, ensuring that it spans across the given number of blocks. <br/><br/>
+         * <p/>
+         * Similar care needs to be taken when using this method as that which is required when using {@link #claim()}. See
+         * the docs for that method to understand these care instructions.
+         *
+         * @see #claim()
+         */
+        public Optional<MappedBufferQueueEntry> claim(byte numBlocks) {
+            checkNotClosed();
+            long n;
+            do {
+                n = publishCursor.get();
+                long maxNumEntries = maxNumEntries() - (n % maxNumEntries());
+                while (maxNumEntries < numBlocks) {
+                    if (publishCursor.compareAndSet(n, n + maxNumEntries)) {
+                        mappedEntries.makeEntry(n, (byte) maxNumEntries).markConsumed();
+                    }
+                    else {
+                        n = publishCursor.get();
+                        maxNumEntries = maxNumEntries() - (n % maxNumEntries());
+                    }
+                }
+                for (long i = n; i < n + numBlocks;) {
+                    MappedBufferQueueEntry entry = mappedEntries.getEntry(i);
+                    if (entry.isPublished() && !entry.isConsumed()) {
+                        return Optional.absent();
+                    }
+                    i = entry.nextCursor;
                 }
             }
-        }
-        while (!publishCursor.compareAndSet(n, n + numBlocks));
+            while (!publishCursor.compareAndSet(n, n + numBlocks));
 
-        return Optional.of(mappedEntries.makeEntry(n, numBlocks));
-    }
+            MappedBufferQueueEntry entry = mappedEntries.makeEntry(n, numBlocks);
+            if (entry.nextCursor - entry.cursor < numBlocks) {
+                entry.markConsumed();
+                return claim(numBlocks);
+            }
 
-    @Override
-    public Optional<MappedBufferQueueEntry> claim() {
-        return claim((byte) 1);
-    }
-
-    @Override
-    public Optional<MappedBufferQueueEntry> claimFor(int dataSize) {
-        if (dataSize > maxDataLength()) {
-            throw new IllegalArgumentException("Cannot create buffer for requested data size in this BufferQueue");
+            return Optional.of(entry);
         }
 
-        int dataPlusMetadataSize = dataSize + metadataOverhead();
-        byte numBlocks = (byte) (dataPlusMetadataSize / blockSize
-                        + dataPlusMetadataSize % blockSize != 0 ? 1 : 0);
-        return claim(numBlocks);
-    }
-
-    @Override
-    public boolean publish(byte[] data) throws BufferOverflowException {
-        Optional<MappedBufferQueueEntry> entry = claimFor(data.length);
-        if (!entry.isPresent()) return false;
-
-        try {
-            entry.get().set(data);
-        }
-        finally {
-            entry.get().markPublished();
-        }
-        return true;
-    }
-
-    @Override
-    public Optional<MappedBufferQueueEntry> peek() {
-        checkNotClosed();
-
-        long readCursorVal = forwardConsumeCursor();
-        if (readCursorVal < publishCursor.get()) {
-            return Optional.of(mappedEntries.getEntry(readCursorVal));
-        }
-        return Optional.absent();
-    }
-
-    @Override
-    public List<MappedBufferQueueEntry> peek(int n) {
-        checkNotClosed();
-        List<MappedBufferQueueEntry> bufferQueueEntries = Lists.newArrayList();
-
-        long readCursorVal = forwardConsumeCursor();
-        for (int i = 0; i < Math.min(n, publishCursor.get() - readCursorVal); i++) {
-            MappedBufferQueueEntry entry = mappedEntries.getEntry(readCursorVal + i);
-            if (!entry.isPublished()) break;
-            bufferQueueEntries.add(entry);
+        @Override
+        public Optional<MappedBufferQueueEntry> claim() {
+            return claim((byte) 1);
         }
 
-        return bufferQueueEntries;
+        @Override
+        public Optional<MappedBufferQueueEntry> claimFor(int dataSize) {
+            if (dataSize > maxDataLength()) {
+                throw new IllegalArgumentException("Cannot create buffer for requested data size in this BufferQueue");
+            }
+
+            int dataPlusMetadataSize = dataSize + metadataOverhead();
+            byte numBlocks = (byte) (dataPlusMetadataSize / blockSize
+                    + (dataPlusMetadataSize % blockSize != 0 ? 1 : 0));
+            return claim(numBlocks);
+        }
+
+        @Override
+        public boolean publish(byte[] data) throws BufferOverflowException {
+            Optional<MappedBufferQueueEntry> entry = claimFor(data.length);
+            if (!entry.isPresent()) return false;
+
+            try {
+                entry.get().set(data);
+            }
+            finally {
+                entry.get().markPublished();
+            }
+            return true;
+        }
+
+        void syncCursor() {
+            mappedHeader.commitPublishCursor(publishCursor.get());
+        }
+
+        public void close() throws IOException {
+            syncCursor();
+            executorService.shutdownNow();
+            fileLock.release();
+        }
+
+        class Syncer implements Runnable {
+            @Override
+            public void run() {
+                syncCursor();
+            }
+        }
     }
 
-    @Override
-    public Optional<byte[]> consume() {
-        Optional<MappedBufferQueueEntry> entry = peek();
-        try {
-            if (entry.isPresent()) {
-                return Optional.of(entry.get().get());
+    public class Consumer implements BufferQueue.Consumer {
+
+        private final FileLock fileLock;
+        private final ScheduledExecutorService executorService;
+        private volatile long publishCursorVal = publishCursor.get();
+
+        public Consumer() throws IOException {
+            fileLock = mappedHeader.lockConsumption();
+            executorService = Executors.newSingleThreadScheduledExecutor();
+            executorService.scheduleAtFixedRate(new Syncer(), headerSyncInterval, headerSyncInterval, TimeUnit.MILLISECONDS);
+        }
+
+        @Override
+        public BufferQueue bufferQueue() {
+            return MappedBufferQueue.this;
+        }
+
+        public void forwardConsumeCursor() {
+            long consumeCursorVal;
+            while (consumeCursor.get() < publishCursorVal) {
+                consumeCursorVal = consumeCursor.get();
+                MappedBufferQueueEntry entry = mappedEntries.getEntry(consumeCursorVal);
+                if (!entry.isConsumed()) {
+                    break;
+                }
+                consumeCursor.compareAndSet(consumeCursorVal, entry.nextCursor);
+            }
+        }
+
+        @Override
+        public Optional<MappedBufferQueueEntry> peek() {
+            checkNotClosed();
+
+            forwardConsumeCursor();
+            long consumeCursorVal = consumeCursor.get();
+            if (consumeCursorVal < publishCursorVal) {
+                MappedBufferQueueEntry entry = mappedEntries.getEntry(consumeCursorVal);
+                if (entry.isPublished() && !entry.isConsumed()) {
+                    return Optional.of(entry);
+                }
             }
             return Optional.absent();
         }
-        finally {
-            if (entry.isPresent()) {
-                entry.get().markConsumed();
-            }
-        }
-    }
 
-    @Override
-    public List<byte[]> consume(int n) {
-        List<MappedBufferQueueEntry> entries = peek(n);
-        List<byte[]> dataList = Lists.newArrayListWithCapacity(entries.size());
-        for (MappedBufferQueueEntry entry : entries) {
+        @Override
+        public List<MappedBufferQueueEntry> peek(int n) {
+            checkNotClosed();
+            List<MappedBufferQueueEntry> bufferQueueEntries = Lists.newArrayList();
+
+            forwardConsumeCursor();
+            long consumeCursorVal = consumeCursor.get();
+            long nextCursorVal = consumeCursorVal;
+            for (int i = 0; i < Math.min(n, publishCursorVal - consumeCursorVal); i++) {
+                MappedBufferQueueEntry entry = mappedEntries.getEntry(nextCursorVal);
+                if (!entry.isPublished()) break;
+                if (!entry.isConsumed()) {
+                    bufferQueueEntries.add(entry);
+                }
+                nextCursorVal = entry.nextCursor;
+            }
+
+            return bufferQueueEntries;
+        }
+
+        @Override
+        public Optional<byte[]> consume() {
+            Optional<MappedBufferQueueEntry> entry = peek();
             try {
-                dataList.add(entry.get());
+                if (entry.isPresent()) {
+                    return Optional.of(entry.get().get());
+                }
+                return Optional.absent();
             }
             finally {
-                entry.markConsumed();
+                if (entry.isPresent()) {
+                    entry.get().markConsumed();
+                }
             }
         }
-        return dataList;
+
+        @Override
+        public List<byte[]> consume(int n) {
+            List<MappedBufferQueueEntry> entries = peek(n);
+            List<byte[]> dataList = Lists.newArrayListWithCapacity(entries.size());
+            for (MappedBufferQueueEntry entry : entries) {
+                try {
+                    dataList.add(entry.get());
+                }
+                finally {
+                    entry.markConsumed();
+                }
+            }
+            return dataList;
+        }
+
+        void syncCursor() {
+            mappedHeader.commitConsumeCursor(consumeCursor.get());
+            publishCursorVal = mappedHeader.readPublishCursor();
+        }
+
+        public void close() throws IOException {
+            syncCursor();
+            executorService.shutdownNow();
+            fileLock.release();
+        }
+
+        class Syncer implements Runnable {
+            @Override
+            public void run() {
+                syncCursor();
+            }
+        }
     }
 
-    public int metadataOverhead() {
-        return MappedBufferQueueEntry.OFFSET_ENTRY + BufferQueueEntry.metadataOverhead();
+    public static int metadataOverhead() {
+        return MappedEntries.OFFSET_ENTRY + MappedBufferQueueEntry.OFFSET_ENTRY + BufferQueueEntry.metadataOverhead();
     }
 
     @Override
@@ -322,7 +459,7 @@ public class MappedBufferQueue implements BufferQueue {
         return size() == 0;
     }
 
-    static class MappedHeader {
+    class MappedHeader {
 
         @VisibleForTesting
         static final int HEADER_LENGTH = 4096;
@@ -362,6 +499,14 @@ public class MappedBufferQueue implements BufferQueue {
 
         public int blockSize() {
             return headerBuffer.getInt((int) OFFSET_BLOCK_SIZE);
+        }
+
+        FileLock lockPublishing() throws IOException {
+            return fileChannel.lock(OFFSET_PUBLISH_CURSOR, Long.SIZE, false);
+        }
+
+        FileLock lockConsumption() throws IOException {
+            return fileChannel.lock(OFFSET_CONSUME_CURSOR, Long.SIZE, false);
         }
 
         long readPublishCursor() {
@@ -415,74 +560,6 @@ public class MappedBufferQueue implements BufferQueue {
         }
     }
 
-    private synchronized void syncHeader() {
-        if (fileChannel == null || !fileChannel.isOpen()) {
-            return;
-        }
-
-        try {
-            FileLock lock = fileChannel.lock();
-            if (lock != null) {
-                // lock maybe null due to a bug in Java 1.6: http://bugs.java.com/view_bug.do?bug_id=7024131
-                try {
-                    long currentWriteCursor = publishCursor.get();
-                    long persistedWriteCursor = mappedHeader.commitPublishCursor(currentWriteCursor);
-                    publishCursor.compareAndSet(currentWriteCursor, persistedWriteCursor);
-
-                    long currentReadCursor = consumeCursor.get();
-                    long persistedReadCursor = mappedHeader.commitConsumeCursor(currentReadCursor);
-                    consumeCursor.compareAndSet(currentReadCursor, persistedReadCursor);
-                }
-                finally {
-                    if (lock.isValid()) {
-                        lock.release();
-                    }
-                }
-            }
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private class HeaderSyncThread extends Thread {
-        private final long waitMillies;
-        private volatile boolean isEnabled = true;
-
-        private HeaderSyncThread(long waitMillies) {
-            this.waitMillies = waitMillies;
-            this.setDaemon(true);
-        }
-
-        @Override
-        public void run() {
-            while (true) {
-                synchronized (mappedHeader) {
-                    if (isEnabled) {
-                        syncHeader();
-                    }
-                    try {
-                        mappedHeader.wait(waitMillies);
-                    }
-                    catch (InterruptedException e) {
-                        break;
-                    }
-                }
-            }
-        }
-
-        public void disable() {
-            isEnabled = false;
-        }
-
-        public void enable() {
-            isEnabled = true;
-            synchronized (this) {
-                notifyAll();
-            }
-        }
-    }
-
     public class MappedEntries {
 
         @VisibleForTesting static final int OFFSET_NUM_BLOCKS = 0;
@@ -510,10 +587,16 @@ public class MappedBufferQueue implements BufferQueue {
         @NotNull
         MappedBufferQueueEntry makeEntry(long cursor, byte numBlocks) {
             int offset = (int) ((cursor % capacity) * blockSize);
-            // TODO: check end of maxNumEntries
-            ByteBuffer buf = subBuffer(entriesBuffer, offset);
+            int endOffset = (int) (((cursor + numBlocks - 1) % capacity) * blockSize);
+
+            if (endOffset < offset) {
+                numBlocks = (byte) (capacity - (offset / blockSize));
+            }
+
+            ByteBuffer buf = subBuffer(entriesBuffer, offset, numBlocks * blockSize);
             buf.put(OFFSET_NUM_BLOCKS, numBlocks);
-            return new MappedBufferQueueEntry(subBuffer(buf, OFFSET_ENTRY), cursor);
+            buf = subBuffer(buf, OFFSET_ENTRY);
+            return new MappedBufferQueueEntry(buf, cursor, cursor + numBlocks);
         }
 
         @VisibleForTesting
@@ -527,8 +610,9 @@ public class MappedBufferQueue implements BufferQueue {
         MappedBufferQueueEntry getEntry(long cursor) {
             int offset = (int) ((cursor % capacity) * blockSize);
             ByteBuffer buf = subBuffer(entriesBuffer, offset);
-            int numBlocks = buf.get(OFFSET_NUM_BLOCKS);
-            return new MappedBufferQueueEntry(subBuffer(buf, OFFSET_ENTRY));
+            byte numBlocks = buf.get(OFFSET_NUM_BLOCKS);
+            buf = subBuffer(buf, OFFSET_ENTRY, numBlocks * blockSize - OFFSET_ENTRY);
+            return new MappedBufferQueueEntry(buf, cursor + numBlocks);
         }
     }
 
@@ -539,9 +623,12 @@ public class MappedBufferQueue implements BufferQueue {
 
         private static final long CURSOR_UNPUBLISHED = -1l;
         private static final long CURSOR_CONSUMED = -2l;
+        private static final long CURSOR_SKIPPED = -2l;
 
         private final ByteBuffer buf;
         private final long cursor;
+
+        private final long nextCursor;
 
         /**
          * To be used when claiming a new entry. The returned entity will be "Claimed, but not yet published". <br/><br/>
@@ -557,10 +644,11 @@ public class MappedBufferQueue implements BufferQueue {
          * @param buf The <code>ByteBuffer</code> representing an entry.
          * @param cursor The cursor for this entry.
          */
-        MappedBufferQueueEntry(ByteBuffer buf, long cursor) {
+        MappedBufferQueueEntry(ByteBuffer buf, long cursor, long nextCursor) {
             super(subBuffer(buf, OFFSET_ENTRY));
             this.buf = buf;
             this.cursor = cursor;
+            this.nextCursor = nextCursor;
             buf.putLong(OFFSET_CURSOR, CURSOR_UNPUBLISHED);
         }
 
@@ -577,16 +665,16 @@ public class MappedBufferQueue implements BufferQueue {
          * @param buf The <code>ByteBuffer</code> representing an entry.
          * @throws IllegalStateException If <code>buf</code> does not represent a "Published, but not yet consumed" entry.
          */
-        MappedBufferQueueEntry(ByteBuffer buf) {
+        MappedBufferQueueEntry(ByteBuffer buf, long nextCursor) {
             super(subBuffer(buf, OFFSET_ENTRY));
             this.buf = buf;
             this.cursor = buf.getLong(OFFSET_CURSOR);
+            this.nextCursor = nextCursor;
         }
 
         @Override
         public void markPublished() {
             writeCursor(cursor);
-            forwardConsumeCursor();
         }
 
         @Override
@@ -597,13 +685,17 @@ public class MappedBufferQueue implements BufferQueue {
         @Override
         public void markConsumed() {
             writeCursor(CURSOR_CONSUMED);
-            forwardConsumeCursor();
+            consumer.forwardConsumeCursor();
         }
 
         @Override
         public boolean isConsumed() {
             return readCursor() == CURSOR_CONSUMED;
         }
+
+        public void markSkipped() { writeCursor(CURSOR_SKIPPED); }
+
+        public boolean isSkipped() { return readCursor() == CURSOR_SKIPPED; }
 
         /**
          * Get the cursor value written in the backing buffer.
@@ -635,11 +727,17 @@ public class MappedBufferQueue implements BufferQueue {
      * @return A new ByteBuffer of specified length which starts at specified position of buf
      */
     private static ByteBuffer subBuffer(ByteBuffer buf, int start, int length) {
-        buf = buf.duplicate();
-        buf.position(start);
-        buf = buf.slice();
-        buf.limit(length);
-        buf.rewind();
+        try {
+            buf = buf.duplicate();
+            buf.position(start);
+            buf = buf.slice();
+            buf.limit(length);
+            buf.rewind();
+        }
+        catch (IllegalArgumentException e) {
+            System.out.println("start: " + start + " length: " + length + " buf.limit():" + buf.limit());
+            throw e;
+        }
         return buf;
     }
 
