@@ -49,15 +49,11 @@ public abstract class BufferQueueEntry {
     @VisibleForTesting static final int OFFSET_CHECKSUM = OFFSET_LENGTH + Integer.SIZE;
     @VisibleForTesting static final int OFFSET_DATA = OFFSET_CHECKSUM + CHECKSUM_BYTES;
 
-    private final ByteBuffer buf;
-
-    public BufferQueueEntry(ByteBuffer buf) {
-        this.buf = buf;
-    }
+    protected abstract ByteBuffer getByteBuffer();
 
     /**
      * Set the data of the entry. <b>Important</b>: The entry will not be marked as published after the data is set.
-     * This must be done explicitly by calling {@link #markPublished()}. <br/><br/>
+     * This must be done explicitly by calling {@link #markPublishedUnconsumed()}. <br/><br/>
      *
      * It is recommended that this method be called in a try block followed by a finally block where the entry is marked
      * as published; the entry must be marked as published even if writing data to the entry failed.
@@ -68,10 +64,11 @@ public abstract class BufferQueueEntry {
      */
     public void set(byte[] data) throws BufferOverflowException {
 
-        if (isPublished()) {
+        if (isPublishedUnconsumed()) {
             throw new IllegalStateException("The given buffer entry has already been marked as published and cannot be written to");
         }
 
+        ByteBuffer buf = getByteBuffer();
         if (calculateEntryLength(data.length) > buf.limit()) {
             throw new BufferOverflowException();
         }
@@ -95,14 +92,14 @@ public abstract class BufferQueueEntry {
      *
      * See {@link #set(byte[])} for best practices around how to call this method.
      */
-    public abstract void markPublished();
+    public abstract void markPublishedUnconsumed();
 
     /**
      * Check if the entry is marked as published or not.
      *
      * @return <code>true</code> if the entry is marked as published, <code>false</code> otherwise.
      */
-    public abstract boolean isPublished();
+    public abstract boolean isPublishedUnconsumed();
 
     /**
      * Get the length of the data in this entry.
@@ -110,9 +107,9 @@ public abstract class BufferQueueEntry {
      * @return Length of data if this entry is published, -1 otherwise.
      */
     public int dataLength() {
-        if (!isPublished()) return -1;
+        if (!isPublishedUnconsumed()) return -1;
 
-        return buf.getInt(OFFSET_LENGTH);
+        return getByteBuffer().getInt(OFFSET_LENGTH);
     }
 
     /**
@@ -123,7 +120,7 @@ public abstract class BufferQueueEntry {
      * @return The max length of data that can be written to this entry.
      */
     public int maxDataLength() {
-        return buf.capacity() - OFFSET_DATA;
+        return getByteBuffer().capacity() - OFFSET_DATA;
     }
 
     /**
@@ -143,9 +140,11 @@ public abstract class BufferQueueEntry {
         }
 
         int length = dataLength();
-        if (!isPublished() || length > maxDataLength() || length <= 0) {
+        if (!isPublishedUnconsumed() || length > maxDataLength() || length <= 0) {
             return new byte[0];
         }
+
+        ByteBuffer buf = getByteBuffer();
 
         byte[] checksumBytes = new byte[CHECKSUM_BYTES];
         buf.position(OFFSET_CHECKSUM);

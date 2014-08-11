@@ -45,7 +45,7 @@
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer, cursor);
 //        assertEquals(cursor, entry.cursor);
 //        assertEquals(0, MappedBufferQueue.MappedBufferQueueEntry.OFFSET_CURSOR);
-//        assertFalse(entry.isPublished());
+//        assertFalse(entry.isPublishedUnconsumed());
 //        assertFalse(entry.isConsumed());
 //    }
 //
@@ -63,11 +63,11 @@
 //    @Test
 //    public void testNewPublishedUnconsumed() throws Exception {
 //        long cursor = randomCursor();
-//        new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer, cursor).markPublished();
+//        new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer, cursor).markPublishedUnconsumed();
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer);
 //        assertEquals(cursor, entry.cursor);
 //        assertEquals(cursor, entry.readCursor());
-//        assertTrue(entry.isPublished());
+//        assertTrue(entry.isPublishedUnconsumed());
 //        assertFalse(entry.isConsumed());
 //    }
 //
@@ -75,7 +75,7 @@
 //    public void testNewPublishedConsumed() throws Exception {
 //        long cursor = randomCursor();
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer, cursor);
-//        entry.markPublished();
+//        entry.markPublishedUnconsumed();
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer);
 //        entry.markConsumed();
 //
@@ -86,7 +86,7 @@
 //    public void testNewClaimPublishedConsumed() throws Exception {
 //        cursor = randomCursor();
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer, cursor);
-//        entry.markPublished();
+//        entry.markPublishedUnconsumed();
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer);
 //        entry.markConsumed();
 //
@@ -94,7 +94,7 @@
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer, cursor);
 //        assertEquals(cursor, entry.cursor);
 //        assertEquals(0, MappedBufferQueue.MappedBufferQueueEntry.OFFSET_CURSOR);
-//        assertFalse(entry.isPublished());
+//        assertFalse(entry.isPublishedUnconsumed());
 //        assertFalse(entry.isConsumed());
 //    }
 //
@@ -104,7 +104,7 @@
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer.duplicate(), cursor);
 //        String data = UUID.randomUUID().toString();
 //        entry.set(data.getBytes());
-//        entry.markPublished();
+//        entry.markPublishedUnconsumed();
 //        assertEquals(data, new String(entry.get()));
 //    }
 //
@@ -121,9 +121,9 @@
 //    public void testPublished() throws Exception {
 //        cursor = randomCursor();
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer.duplicate(), cursor);
-//        assertFalse(entry.isPublished());
-//        entry.markPublished();
-//        assertTrue(entry.isPublished());
+//        assertFalse(entry.isPublishedUnconsumed());
+//        entry.markPublishedUnconsumed();
+//        assertTrue(entry.isPublishedUnconsumed());
 //    }
 //
 //    @Test
@@ -132,14 +132,14 @@
 //        String data = "hello world!";
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer.duplicate(), cursor);
 //        entry.set(data.getBytes());
-//        entry.markPublished();
+//        entry.markPublishedUnconsumed();
 //        assertEquals(data.length(), entry.dataLength());
 //
 //        cursor = randomCursor();
 //        data = "hello there world!";
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer.duplicate(), cursor);
 //        entry.set(data.getBytes());
-//        entry.markPublished();
+//        entry.markPublishedUnconsumed();
 //        assertEquals(data.length(), entry.dataLength());
 //    }
 //
@@ -166,7 +166,7 @@
 //        cursor = randomCursor();
 //        ByteBuffer byteBuffer2 = byteBuffer.duplicate();
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer2, cursor);
-//        entry.markPublished();
+//        entry.markPublishedUnconsumed();
 //
 //        entry = new MappedBufferQueue.MappedBufferQueueEntry(byteBuffer2);
 //        assertFalse(entry.isConsumed());

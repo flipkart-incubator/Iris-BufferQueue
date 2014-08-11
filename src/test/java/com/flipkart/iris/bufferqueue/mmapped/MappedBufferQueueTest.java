@@ -137,13 +137,16 @@ public class MappedBufferQueueTest {
         for (int i = 0; i < 15; i++) {
             assertTrue(publisher.publish(("" + i).getBytes()));
         }
+        bufferQueue.printBufferSkeleton("After 1st publish");
         Thread.sleep(10);
         for (int i = 0; i < 15; i++) {
             assertEquals("" + i, new String(consumer.consume().get()));
         }
+        bufferQueue.printBufferSkeleton("After 1st consumption");
 
         for (int i = 0; i < 15; i++) {
             assertTrue(publisher.publish(("" + i).getBytes()));
+            bufferQueue.printBufferSkeleton("After second publish (" + i + ")");
         }
         Thread.sleep(10);
         for (int i = 0; i < 15; i++) {

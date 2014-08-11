@@ -35,7 +35,7 @@ import java.util.List;
  * <ol>
  *      <li>"Claim" a new entry using the method {@link Publisher#claim()}</li>
  *      <li>Write the data to the returned {@link BufferQueueEntry} using any method that it offers</li>
- *      <li>Mark the entry as published by calling {@link BufferQueueEntry#markPublished()}</li>
+ *      <li>Mark the entry as published by calling {@link BufferQueueEntry#markPublishedUnconsumed()}</li>
  * </ol>
  *
  * Alternatively, calling {@link Publisher#publish(byte[] data)} will
@@ -81,11 +81,11 @@ public interface BufferQueue {
         /**
          * Claim the next entry in the buffer queue. <br/>
          *
-         * Important: The publisher **must** call {@link BufferQueueEntry#markPublished()}
+         * Important: The publisher **must** call {@link BufferQueueEntry#markPublishedUnconsumed()}
          * on the returned {@link BufferQueueEntry}, otherwise no consumer
          * will be able to move past this point. <br/><br/>
          *
-         * {@link BufferQueueEntry#markPublished()} **must** be called even if writing data
+         * {@link BufferQueueEntry#markPublishedUnconsumed()} **must** be called even if writing data
          * to the buffer failed. It is recommended that this method be called in a
          * <code>finally</code> block; for example:
          *
@@ -96,14 +96,14 @@ public interface BufferQueue {
          *          // entry.set(data);
          *      }
          *      finally {
-         *          entry.markPublished();
+         *          entry.markPublishedUnconsumed();
          *      }
          * </code>
          * </pre>
          *
          * @return The claimed entry. The reference will be absent in the Optional
          *          if claiming failed (may happen if the buffer is full, for example).
-         * @see BufferQueueEntry#markPublished()
+         * @see BufferQueueEntry#markPublishedUnconsumed()
          */
         Optional<? extends BufferQueueEntry> claim() throws IOException;
 
