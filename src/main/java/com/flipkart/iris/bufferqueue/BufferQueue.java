@@ -76,7 +76,7 @@ public interface BufferQueue {
 
     public interface Publisher {
 
-        BufferQueue bufferQueue();
+        BufferQueue bufferQueue() throws IOException;
 
         /**
          * Claim the next entry in the buffer queue. <br/>
@@ -132,7 +132,7 @@ public interface BufferQueue {
 
     public interface Consumer {
 
-        BufferQueue bufferQueue();
+        BufferQueue bufferQueue() throws IOException;
 
         /**
          * Return the next consumable entry from the BufferQueue. <br/><br/>
