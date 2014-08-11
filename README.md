@@ -35,7 +35,7 @@ And add the following dependency to the 'dependencies' section of your pom.xml.
 	<dependency>
 	  <groupId>com.flipkart.iris</groupId>
 	  <artifactId>bufferqueue</artifactId>
-	  <version>0.1</version>
+	  <version>0.2-SNAPSHOT</version>
 	</dependency>
 
 #### Download
@@ -44,70 +44,108 @@ You can download the jar and find all the dependencies on [Clojars](https://cloj
 
 ### Create an instance
 
-    File file = new File("test.ibq");
-    if (!file.exists()) {
-        int maxDataLength = 4 * 1024; // max size of data that can be written to the queue
-        long numMessages = 1000000; // maximum number of unconsumed messages that can be kept in the queue
-        MappedBufferQueueFactory.format(file, maxDataLength, numMessages);
-    }
-    BufferQueue bufferQueue = MappedBufferQueueFactory.getInstance(file);
+    File dir = new File("/tmp/bqtest");    // directory to create mapping files in
+    int blockSize = 1024;                  // the mapped files are divided into "blocks", this is the size of each block
+    long fileSize = 512 * 1024 * 1024;     // 512 MB
+    int maxFiles = Integer.MAX_VALUE;      // maximum number of files to create, no impact as of now
+    MappedDirBufferQueue bufferQueue = new MappedDirBufferQueue(dir, blockSize, fileSize, maxFiles);
 
-### Publish
-
-Let's publish a simple message to the queue.
+### Publishing to the queue
 
     byte[] data = "Hello world!".getBytes();
+    BufferQueue.Publisher publisher = bufferQueue.publisher();
 
 ##### High-level API
 
-    bufferQueue.publish(data);
+    if (publisher.publish(data)) {
+        // success
+    }
+    else {
+        // failure
+    }
 
 ##### Low-level API
 
-    BufferQueueEntry entry = bufferQueue.next().orNull();
+    BufferQueueEntry entry = publisher.claimFor(data).orNull();
     if (entry != null) {
     	try {
 		    entry.set(data);
 		}
 		finally {
-		    entry.markPublished();
+		    entry.markPublishedUnconsumed();
 		}
 	}
 	else {
 		System.out.println("Queue full, cannot write message");
 	}
 
-It is important that the `markPublished()` call is done within a `finally` block to ensure that it is always made.
+It is important that the `markPublishedUnconsumed()` call is done within a `finally` block to ensure that it is always made.
 
 ### Consuming from the queue
 
-##### Simple API
+    BufferQueue.Consumer consumer = bufferQueue.consumer();
 
-    BufferQueueEntry entry = bufferQueue.consume().orNull());
+#### Unsafe APIs
+
+When you use the unsafe APIs, you stand a chance to lose some data — if your code calls `consume` but dies before
+processing the returned data, that data would have to be deemed lost i.e. it will not be available for processing again.
+
+##### Unsafe Simple API
+
+    byte[] data = consumer.consume().orNull());
+    if (data != null) {
+        // process data
+	}
+	else {
+		// nothing to consume; maybe sleep for some time?
+	}
+
+##### Unsafe Batch API
+
+	int batchSize = 100;
+    List<byte[]> dataList = consumer.consume(batchSize);
+    if (dataList.size() > 0) {
+	    for (byte[] data : dataList) {
+            // process data
+	    }
+	}
+	else {
+		// nothing to consumer; maybe sleep for some time?
+	}	
+
+#### Safe APIs
+
+With safe APIs you'll have to explicitly confirm that you have processed any returned data; only after such a
+confirmation will the data be discarded. But note: given that consumption from BufferQueue is sequential, if there is
+even one particular entry whose processing is taking a long time, it'll stall all the consumption.
+
+##### Safe Simple API
+
+    BufferQueueEntry entry = consumer.peek().orNull());
     if (entry != null) {
 	    try {
 	        byte[] data = entry.get();
-	        System.out.println(data);
+	        // process data
 	    }
 	    finally {
 	        entry.markConsumed();
 	    }
 	}
 	else {
-		System.out.prinltn("Nothing to consume");
+		// nothing to consume; maybe sleep for some time?
 	}
 
 It is important that the `markConsumed()` call is done within a `finally` block to ensure that it is always made.
 
-##### Batch API
+##### Safe Batch API
 
 	int batchSize = 100;
-    List<BufferQueueEntry> entries = bufferQueue.consume(batchSize);
+    List<BufferQueueEntry> entries = consumer.peek(batchSize);
     if (entries.size() > 0) {
 	    for (BufferQueueEntry entry : entries) {
 	        try {
 	            byte[] data = entry.get();
-	            System.out.println(data);
+	            // process data
 	        }
 	        finally {
 	            entry.markConsumed();
@@ -115,7 +153,7 @@ It is important that the `markConsumed()` call is done within a `finally` block 
 	    }
 	}
 	else {
-		System.out.prinltn("Nothing to consume");
+		// nothing to consumer; maybe sleep for some time?
 	}	
 
 It is important that the `markConsumed()` call is done within a `finally` block to ensure that it is always made.
