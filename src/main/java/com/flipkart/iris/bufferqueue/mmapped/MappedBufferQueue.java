@@ -343,8 +343,18 @@ public class MappedBufferQueue implements BufferQueue {
             return MappedBufferQueue.this;
         }
 
+        private long getPublishCursorVal() {
+            if (publisher != null) {
+                return publishCursor.get();
+            }
+            else {
+                return publishCursorVal;
+            }
+        }
+
         public void forwardConsumeCursor() {
             long consumeCursorVal;
+            long publishCursorVal = getPublishCursorVal();
             while (consumeCursor.get() < publishCursorVal) {
                 consumeCursorVal = consumeCursor.get();
                 MappedBufferQueueEntry entry = mappedEntries.getEntry(consumeCursorVal);
@@ -361,6 +371,7 @@ public class MappedBufferQueue implements BufferQueue {
 
             forwardConsumeCursor();
             long consumeCursorVal = consumeCursor.get();
+            long publishCursorVal = getPublishCursorVal();
             if (consumeCursorVal < publishCursorVal) {
                 MappedBufferQueueEntry entry = mappedEntries.getEntry(consumeCursorVal);
                 if (entry.isPublishedUnconsumed()) {
@@ -378,6 +389,7 @@ public class MappedBufferQueue implements BufferQueue {
             forwardConsumeCursor();
             long consumeCursorVal = consumeCursor.get();
             long nextCursorVal = consumeCursorVal;
+            long publishCursorVal = getPublishCursorVal();
             for (int i = 0; i < Math.min(n, publishCursorVal - consumeCursorVal); i++) {
                 MappedBufferQueueEntry entry = mappedEntries.getEntry(nextCursorVal);
                 if (entry.isUnclaimed() || entry.isClaimedUnpublished()) break;
@@ -713,7 +725,9 @@ public class MappedBufferQueue implements BufferQueue {
         @Override
         public void markConsumed() {
             writeCursor(CURSOR_CONSUMED);
-            consumer.forwardConsumeCursor();
+            if (consumer != null) {
+                consumer.forwardConsumeCursor();
+            }
         }
 
         @Override

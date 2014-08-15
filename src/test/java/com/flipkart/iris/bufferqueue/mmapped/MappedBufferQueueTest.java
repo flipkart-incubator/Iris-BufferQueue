@@ -48,7 +48,6 @@ public class MappedBufferQueueTest {
         BufferQueue.Consumer consumer = bufferQueue.consumer();
 
         publisher.publish(MSG1);
-        Thread.sleep(10);
         assertArrayEquals(MSG1, consumer.consume().get());
         assertEquals(Optional.<byte[]>absent(), consumer.consume());
     }
@@ -138,7 +137,6 @@ public class MappedBufferQueueTest {
             assertTrue(publisher.publish(("" + i).getBytes()));
         }
         bufferQueue.printBufferSkeleton("After 1st publish");
-        Thread.sleep(10);
         for (int i = 0; i < 15; i++) {
             assertEquals("" + i, new String(consumer.consume().get()));
         }
@@ -148,7 +146,6 @@ public class MappedBufferQueueTest {
             assertTrue(publisher.publish(("" + i).getBytes()));
             bufferQueue.printBufferSkeleton("After second publish (" + i + ")");
         }
-        Thread.sleep(10);
         for (int i = 0; i < 15; i++) {
             assertEquals("" + i, new String(consumer.consume().get()));
         }
@@ -156,7 +153,6 @@ public class MappedBufferQueueTest {
         for (int i = 0; i < 15; i++) {
             assertTrue(publisher.publish(("" + i).getBytes()));
         }
-        Thread.sleep(10);
         for (int i = 0; i < 15; i++) {
             assertEquals("" + i, new String(consumer.consume().get()));
         }
