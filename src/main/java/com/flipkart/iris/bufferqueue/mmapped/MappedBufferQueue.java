@@ -32,6 +32,7 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -511,11 +512,31 @@ public class MappedBufferQueue implements BufferQueue {
         }
 
         FileLock lockPublishing() throws IOException {
-            return fileChannel.lock(OFFSET_PUBLISH_CURSOR, Long.SIZE, false);
+            FileLock fileLock;
+            try {
+                fileLock = fileChannel.tryLock(OFFSET_PUBLISH_CURSOR, Long.SIZE, false);
+            }
+            catch (OverlappingFileLockException e) {
+                throw new RuntimeException("MappedBufferQueue already open in this JVM.", e);
+            }
+            if (fileLock == null) {
+                throw new RuntimeException("Another process already has the file open for publishing");
+            }
+            return fileLock;
         }
 
         FileLock lockConsumption() throws IOException {
-            return fileChannel.lock(OFFSET_CONSUME_CURSOR, Long.SIZE, false);
+            FileLock fileLock;
+            try {
+                fileLock = fileChannel.tryLock(OFFSET_CONSUME_CURSOR, Long.SIZE, false);
+            }
+            catch (OverlappingFileLockException e) {
+                throw new RuntimeException("MappedBufferQueue already open in this JVM.", e);
+            }
+            if (fileLock == null) {
+                throw new RuntimeException("Another process already has the file open for publishing");
+            }
+            return fileLock;
         }
 
         long readPublishCursor() {
