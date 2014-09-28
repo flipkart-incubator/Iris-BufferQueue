@@ -22,6 +22,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import javax.validation.constraints.NotNull;
 import java.io.File;
@@ -36,6 +37,7 @@ import java.nio.channels.OverlappingFileLockException;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
@@ -222,7 +224,13 @@ public class MappedBufferQueue implements BufferQueue {
 
         public Publisher() throws IOException {
             fileLock = mappedHeader.lockPublishing();
-            executorService = Executors.newSingleThreadScheduledExecutor();
+            ThreadFactory threadFactory = new ThreadFactoryBuilder()
+                    .setDaemon(true)
+                    .setNameFormat(MappedBufferQueue.class.getSimpleName()
+                            + "-" + Publisher.class.getSimpleName()
+                            + "-%d")
+                    .build();
+            executorService = Executors.newSingleThreadScheduledExecutor(threadFactory);
             executorService.scheduleAtFixedRate(new Syncer(), headerSyncInterval, headerSyncInterval, TimeUnit.MILLISECONDS);
         }
 
@@ -334,7 +342,13 @@ public class MappedBufferQueue implements BufferQueue {
 
         public Consumer() throws IOException {
             fileLock = mappedHeader.lockConsumption();
-            executorService = Executors.newSingleThreadScheduledExecutor();
+            ThreadFactory threadFactory = new ThreadFactoryBuilder()
+                    .setDaemon(true)
+                    .setNameFormat(MappedBufferQueue.class.getSimpleName()
+                            + "-" + Consumer.class.getSimpleName()
+                            + "-%d")
+                    .build();
+            executorService = Executors.newSingleThreadScheduledExecutor(threadFactory);
             executorService.scheduleAtFixedRate(new Syncer(), headerSyncInterval, headerSyncInterval, TimeUnit.MILLISECONDS);
         }
 
