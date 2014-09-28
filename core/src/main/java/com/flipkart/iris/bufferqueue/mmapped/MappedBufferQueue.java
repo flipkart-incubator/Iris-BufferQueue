@@ -200,21 +200,16 @@ public class MappedBufferQueue implements BufferQueue {
         }
     }
 
-    void printBufferSkeleton(String position) {
+    public void printBufferSkeleton(String position) {
         System.out.println("Buffer Skeleton (" + position + ")");
         printBufferSkeleton();
     }
 
     void printBufferSkeleton() {
-        System.out.println("ConsumeCursor: " + consumeCursor.get() + " PublishCursor: " + publishCursor.get());
-        for (long i = consumeCursor.get(); i < publishCursor.get();) {
-            MappedBufferQueueEntry entry = mappedEntries.getEntry(i);
-            System.out.println("Cursor: " + i +
-                    ", nextCursor: " + entry.nextCursor() +
-                    ", isPublishedUnconsumed: " + entry.isPublishedUnconsumed() +
-                    ", isConsumed: " + entry.isConsumed());
-            i = entry.nextCursor();
-        }
+        System.out.println("ConsumeCursor: " + consumeCursor.get()
+                        + " PublishCursor: " + publishCursor.get()
+                        + " numBlocks: " + maxNumEntries()
+        );
     }
 
     public class Publisher implements BufferQueue.Publisher {
