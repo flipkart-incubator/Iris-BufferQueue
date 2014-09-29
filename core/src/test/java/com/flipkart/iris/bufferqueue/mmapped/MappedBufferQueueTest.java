@@ -11,9 +11,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class MappedBufferQueueTest {
     private static final byte[] MSG1 = "hello world".getBytes();
@@ -130,32 +128,41 @@ public class MappedBufferQueueTest {
         final BufferQueue.Publisher publisher = bufferQueue.publisher();
         final BufferQueue.Consumer consumer = bufferQueue.consumer();
 
-        final int numMessages = 100;
-        final List<byte[]> msgs = new ArrayList<byte[]>();
-
-        for (int i = 0; i < 15; i++) {
-            assertTrue(publisher.publish(("" + i).getBytes()));
+        for (int i = 0; i < 32; i++) {
+            boolean result = publisher.publish(("" + i).getBytes());
+            if (i < 16) {
+                assertTrue(result);
+            }
+            else {
+                assertFalse(result);
+            }
         }
         bufferQueue.printBufferSkeleton("After 1st publish");
-        for (int i = 0; i < 15; i++) {
-            assertEquals("" + i, new String(consumer.consume().get()));
+        for (int i = 0; i < 32; i++) {
+            Optional<byte[]> consume = consumer.consume();
+            if (i < 16) {
+                assertEquals("" + i, new String(consume.get()));
+            }
+            else {
+                assertEquals(Optional.<byte[]>absent(), consume);
+            }
         }
         bufferQueue.printBufferSkeleton("After 1st consumption");
 
-        for (int i = 0; i < 15; i++) {
+        for (int i = 0; i < 16; i++) {
             assertTrue(publisher.publish(("" + i).getBytes()));
             bufferQueue.printBufferSkeleton("After second publish (" + i + ")");
         }
-        for (int i = 0; i < 15; i++) {
+        for (int i = 0; i < 16; i++) {
             assertEquals("" + i, new String(consumer.consume().get()));
         }
 
-        for (int i = 0; i < 15; i++) {
+        /*for (int i = 0; i < 16; i++) {
             assertTrue(publisher.publish(("" + i).getBytes()));
         }
-        for (int i = 0; i < 15; i++) {
+        for (int i = 0; i < 16; i++) {
             assertEquals("" + i, new String(consumer.consume().get()));
-        }
+        }*/
     }
 
     @Test
