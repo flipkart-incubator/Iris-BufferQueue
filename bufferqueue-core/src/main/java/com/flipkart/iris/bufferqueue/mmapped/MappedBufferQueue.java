@@ -143,6 +143,18 @@ public class MappedBufferQueue implements BufferQueue {
         this.publishCursor.set(mappedHeader.readPublishCursor());
 
         this.headerSyncInterval = builder.headerSyncInterval;
+
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                try {
+                    MappedBufferQueue.this.close();
+                }
+                catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     private MappedHeader getHeaderBuffer(ByteBuffer fileBuffer) {
@@ -184,7 +196,7 @@ public class MappedBufferQueue implements BufferQueue {
     }
 
     @Override
-    public void close() throws IOException {
+    synchronized public void close() throws IOException {
         if (!isClosed) {
             if (publisher != null) publisher.close();
             if (consumer != null) consumer.close();
