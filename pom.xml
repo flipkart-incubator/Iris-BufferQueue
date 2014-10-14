@@ -28,7 +28,7 @@
 
     <packaging>pom</packaging>
 	<modules>
-		<module>core</module>
+		<module>bufferqueue-core</module>
         <module>benchmark</module>
 	</modules>
 

@@ -47,7 +47,7 @@ questions.
         <dependency>
             <groupId>com.flipkart.iris</groupId>
             <artifactId>bufferqueue-core</artifactId>
-            <version>0.2-SNAPSHOT</version>
+            <version>${parent.version}</version>
         </dependency>
 
         <dependency>
@@ -65,6 +65,12 @@ questions.
             <groupId>com.leansoft</groupId>
             <artifactId>bigqueue</artifactId>
             <version>0.7.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>14.0</version>
         </dependency>
     </dependencies>
 
