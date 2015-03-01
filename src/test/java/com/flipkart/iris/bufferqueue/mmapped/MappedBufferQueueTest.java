@@ -104,6 +104,8 @@ public class MappedBufferQueueTest {
             assertTrue("All messages should be published", isPublished);
         }
 
+        assertEquals(numMessages, bufferQueue.size());
+
         final byte[] msg = UUID.randomUUID().toString().getBytes();
         final boolean isPublished = bufferQueue.publish(msg);
         assertFalse("Should not publish more messages when queue is full", isPublished);
