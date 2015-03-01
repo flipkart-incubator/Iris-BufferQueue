@@ -136,15 +136,21 @@ public class MappedBufferQueue implements BufferQueue {
 
     @Override
     public Optional<BufferQueueEntry> next() {
-        if (writeCursor.get() - readCursor.get() >= capacity()) {
-            forwardReadCursor();
+        do {
             if (writeCursor.get() - readCursor.get() >= capacity()) {
-                return Optional.absent();
+                forwardReadCursor();
+                if (writeCursor.get() - readCursor.get() >= capacity()) {
+                    return Optional.absent();
+                }
             }
-        }
 
-        long n = writeCursor.getAndIncrement();
-        return Optional.of(mappedEntries.makeEntry(n));
+            final long n = writeCursor.get();
+            final long nextIndex = n + 1;
+            if (writeCursor.compareAndSet(n, nextIndex)) {
+                return Optional.of(mappedEntries.makeEntry(nextIndex));
+            }
+
+        } while(true);
     }
 
     @Override
