@@ -59,6 +59,7 @@ public class MappedBufferQueue implements BufferQueue {
     private final Integer maxDataLength;
     private final AtomicLong readCursor = new AtomicLong(1);
     private final AtomicLong writeCursor = new AtomicLong(1);
+    private final AtomicLong reserveCursor = new AtomicLong(1);
 
     private final File file;
     private final ByteBuffer fileBuffer;
@@ -99,6 +100,7 @@ public class MappedBufferQueue implements BufferQueue {
         maxDataLength = mappedHeader.maxDataLength();
         readCursor.set(mappedHeader.readCursor());
         writeCursor.set(mappedHeader.writeCursor());
+        reserveCursor.set(writeCursor.get());
 
         headerSyncThread = new HeaderSyncThread(SYNC_INTERVAL);
         headerSyncThread.start();
@@ -137,16 +139,18 @@ public class MappedBufferQueue implements BufferQueue {
     @Override
     public Optional<BufferQueueEntry> next() {
         do {
-            if (writeCursor.get() - readCursor.get() >= capacity()) {
+            if (reserveCursor.get() - readCursor.get() >= capacity()) {
                 forwardReadCursor();
-                if (writeCursor.get() - readCursor.get() >= capacity()) {
+                if (reserveCursor.get() - readCursor.get() >= capacity()) {
                     return Optional.absent();
                 }
             }
 
-            final long n = writeCursor.get();
-            if (writeCursor.compareAndSet(n, n + 1)) {
-                return Optional.of(mappedEntries.makeEntry(n));
+            final long n = reserveCursor.get();
+            if (reserveCursor.compareAndSet(n, n + 1)) {
+                final Optional<BufferQueueEntry> optional = Optional.of(mappedEntries.makeEntry(n));
+                writeCursor.incrementAndGet();
+                return optional;
             }
 
         } while(true);
