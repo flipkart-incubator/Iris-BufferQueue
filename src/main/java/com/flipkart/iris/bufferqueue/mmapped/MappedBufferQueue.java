@@ -145,8 +145,7 @@ public class MappedBufferQueue implements BufferQueue {
             }
 
             final long n = writeCursor.get();
-            final long nextIndex = n + 1;
-            if (writeCursor.compareAndSet(n, nextIndex)) {
+            if (writeCursor.compareAndSet(n, n + 1)) {
                 return Optional.of(mappedEntries.makeEntry(n));
             }
 
