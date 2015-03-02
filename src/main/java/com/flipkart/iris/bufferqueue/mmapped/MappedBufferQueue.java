@@ -31,6 +31,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.util.List;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -60,6 +61,7 @@ public class MappedBufferQueue implements BufferQueue {
     private final AtomicLong readCursor = new AtomicLong(1);
     private final AtomicLong writeCursor = new AtomicLong(1);
     private final AtomicLong reserveCursor = new AtomicLong(1);
+    private final ConcurrentSkipListSet<Long> orderedCommitSet = new ConcurrentSkipListSet<Long>();
 
     private final File file;
     private final ByteBuffer fileBuffer;
@@ -149,11 +151,23 @@ public class MappedBufferQueue implements BufferQueue {
             final long n = reserveCursor.get();
             if (reserveCursor.compareAndSet(n, n + 1)) {
                 final Optional<BufferQueueEntry> optional = Optional.of(mappedEntries.makeEntry(n));
-                writeCursor.incrementAndGet();
+                orderedCommitSet.add(n);
+
+                forwardWriteCursor();
                 return optional;
             }
 
         } while(true);
+    }
+
+    private void forwardWriteCursor() {
+        while (true) {
+            final long writeCursorPos = writeCursor.get();
+            if (!orderedCommitSet.remove(writeCursorPos)) {
+                break;
+            }
+            writeCursor.incrementAndGet();
+        }
     }
 
     @Override
