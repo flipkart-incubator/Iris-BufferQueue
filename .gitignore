@@ -7,3 +7,5 @@ settings.xml
 *.ipr
 *.iml
 *.iws
+*.idea
+

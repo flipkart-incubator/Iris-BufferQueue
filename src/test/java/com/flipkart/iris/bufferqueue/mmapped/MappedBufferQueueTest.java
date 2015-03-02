@@ -20,25 +20,27 @@ import com.flipkart.iris.bufferqueue.BufferQueueEntry;
 import com.google.common.base.Optional;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.UUID;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class MappedBufferQueueTest {
 
     File file;
     MappedBufferQueue bufferQueue;
+    int numMessages = 10;
+    int maxDataLength = 256 * 1024;
 
     @Before
     public void setUp() throws Exception {
         file = File.createTempFile("bufferqueue-test", ".bq");
         file.delete();
-        int maxDataLength = 256 * 1024;
-        long numMessages = 1000;
+
         MappedBufferQueueFactory.format(file, maxDataLength, numMessages);
         bufferQueue = MappedBufferQueueFactory.getInstance(file);
     }
@@ -52,9 +54,87 @@ public class MappedBufferQueueTest {
     public void testSimplePublishConsume() throws Exception {
         byte[] msg = UUID.randomUUID().toString().getBytes();
         bufferQueue.publish(msg);
+        assertEquals("Size mismatch", 1, bufferQueue.size());
+
         BufferQueueEntry bufferQueueEntry = bufferQueue.consume().get();
         assertArrayEquals(msg, bufferQueueEntry.get());
         bufferQueueEntry.markConsumed();
+        assertEquals(Optional.<BufferQueueEntry>absent(), bufferQueue.consume());
+        assertEquals("Size mismatch", 0, bufferQueue.size());
+    }
+
+    @Test
+    public void testCircularPublishConsume() throws Exception {
+
+        final ArrayList<byte[]> sampleArray = new ArrayList<byte[]>(numMessages);
+        for(int i = 0; i < numMessages; ++i) {
+            byte[] msg = UUID.randomUUID().toString().getBytes();
+            bufferQueue.publish(msg);
+            sampleArray.add(msg);
+        }
+
+        assertEquals("Size mismatch", numMessages, bufferQueue.size());
+
+        for (int i = 0; i < numMessages; ++i) {
+            BufferQueueEntry bufferQueueEntry = bufferQueue.consume().get();
+            byte[] msg = sampleArray.get(i);
+            assertArrayEquals(msg, bufferQueueEntry.get());
+            bufferQueueEntry.markConsumed();
+        }
+
+        assertEquals(Optional.<BufferQueueEntry>absent(), bufferQueue.consume());
+        assertEquals("Size mismatch", 0, bufferQueue.size());
+
+        {
+            final byte[] msg = UUID.randomUUID().toString().getBytes();
+            bufferQueue.publish(msg);
+            assertEquals("Size mismatch", 1, bufferQueue.size());
+            final BufferQueueEntry bufferQueueEntry = bufferQueue.consume().get();
+            assertArrayEquals(msg, bufferQueueEntry.get());
+            bufferQueueEntry.markConsumed();
+        }
+
+        {
+            final byte[] msg = UUID.randomUUID().toString().getBytes();
+            bufferQueue.publish(msg);
+            final BufferQueueEntry bufferQueueEntry = bufferQueue.consume().get();
+            assertArrayEquals(msg, bufferQueueEntry.get());
+            bufferQueueEntry.markConsumed();
+        }
+
+    }
+
+    @Test
+    public void testFullQueue() throws Exception {
+        for(int i = 0; i < numMessages; ++i) {
+            final byte[] msg = UUID.randomUUID().toString().getBytes();
+            final boolean isPublished = bufferQueue.publish(msg);
+            assertTrue("All messages should be published", isPublished);
+        }
+
+        assertEquals("Size mismatch", numMessages, bufferQueue.size());
+
+        final byte[] msg = UUID.randomUUID().toString().getBytes();
+        final boolean isPublished = bufferQueue.publish(msg);
+        assertFalse("Should not publish more messages when queue is full", isPublished);
+        assertEquals("Size mismatch",   numMessages, bufferQueue.size());
+    }
+
+    @Ignore("TestcaseForBug#4")
+    @Test
+    public void testSizeConsistencyBug() throws Exception {
+
+        byte[] msg = UUID.randomUUID().toString().getBytes();
+        bufferQueue.publish(msg);
+        assertEquals("Size mismatch", 1, bufferQueue.size());
+
+        BufferQueueEntry bufferQueueEntry = bufferQueue.consume().get();
+        assertArrayEquals(msg, bufferQueueEntry.get());
+        bufferQueueEntry.markConsumed();
+
+        // <------------------------
+        // readCursor need to be nudged forward using an extra call to bufferQueue.consume()
+        assertEquals("Size mismatch", 0, bufferQueue.size());
         assertEquals(Optional.<BufferQueueEntry>absent(), bufferQueue.consume());
     }
 }

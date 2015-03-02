@@ -59,6 +59,7 @@ public class MappedBufferQueue implements BufferQueue {
     private final Integer maxDataLength;
     private final AtomicLong readCursor = new AtomicLong(1);
     private final AtomicLong writeCursor = new AtomicLong(1);
+    private final AtomicLong reserveCursor = new AtomicLong(1);
 
     private final File file;
     private final ByteBuffer fileBuffer;
@@ -99,6 +100,7 @@ public class MappedBufferQueue implements BufferQueue {
         maxDataLength = mappedHeader.maxDataLength();
         readCursor.set(mappedHeader.readCursor());
         writeCursor.set(mappedHeader.writeCursor());
+        reserveCursor.set(writeCursor.get());
 
         headerSyncThread = new HeaderSyncThread(SYNC_INTERVAL);
         headerSyncThread.start();
@@ -136,15 +138,34 @@ public class MappedBufferQueue implements BufferQueue {
 
     @Override
     public Optional<BufferQueueEntry> next() {
-        if (writeCursor.get() - readCursor.get() >= capacity()) {
-            forwardReadCursor();
-            if (writeCursor.get() - readCursor.get() >= capacity()) {
-                return Optional.absent();
+        do {
+            if (reserveCursor.get() - readCursor.get() >= capacity()) {
+                forwardReadCursor();
+                if (reserveCursor.get() - readCursor.get() >= capacity()) {
+                    return Optional.absent();
+                }
             }
-        }
 
-        long n = writeCursor.getAndIncrement();
-        return Optional.of(mappedEntries.makeEntry(n));
+            final long n = reserveCursor.get();
+            if (reserveCursor.compareAndSet(n, n + 1)) {
+                final Optional<BufferQueueEntry> optional = Optional.of(mappedEntries.makeEntry(n));
+
+                forwardWriteCursor();
+                return optional;
+            }
+
+        } while(true);
+    }
+
+    private void forwardWriteCursor() {
+        long writeCursorVal;
+        while ((writeCursorVal = writeCursor.get()) < reserveCursor.get()) {
+            final BufferQueueEntry entry = mappedEntries.getEntry(writeCursorVal);
+            if (entry.isConsumed()) {
+                break;
+            }
+            writeCursor.compareAndSet(writeCursorVal, writeCursorVal + 1);
+        }
     }
 
     @Override
